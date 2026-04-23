@@ -362,12 +362,14 @@ generate_qc_plots <- function(rgset, detP, beta_values, sample_qc,
       for (sample in unique(density_data$Sample)) {
         subset_data <- density_data[density_data$Sample == sample, ]
         pass_qc <- subset_data$Pass_QC[1]
+        # Theme colors: teal for QC pass, red for QC fail.
         p <- p %>% plotly::add_lines(
           data = subset_data,
-          x = ~x, 
-          y = ~y, 
+          x = ~x,
+          y = ~y,
           name = sample,
-          line = list(color = ifelse(pass_qc, "blue", "red"))
+          opacity = 0.9,
+          line = list(color = ifelse(pass_qc, "#0d9488", "#ef4444"))
         )
       }
       p <- p %>% plotly::layout(
@@ -387,18 +389,25 @@ generate_qc_plots <- function(rgset, detP, beta_values, sample_qc,
         mds_data$Sample_ID <- rownames(mds_data)
         mds_data <- merge(mds_data, sample_qc, by = "Sample_ID")
         
+        # Uniform marker styling: teal fill (#018571), brown border
+        # (#a6611a). Pass/fail signaling is surfaced on the QC tab's
+        # table; keeping the 3D MDS colors uniform makes the point cloud
+        # read cleaner.
         p <- plotly::plot_ly(
           data = mds_data,
-          x = ~PC1, 
-          y = ~PC2, 
+          x = ~PC1,
+          y = ~PC2,
           z = ~PC3,
-          color = ~Pass_QC,
-          colors = c("red", "blue"),
           text = ~Sample_ID,
           type = "scatter3d",
           mode = "markers",
-          marker = list(size = 5)
-        ) %>% 
+          marker = list(
+            size = 5,
+            opacity = 0.9,
+            color = "#018571",
+            line = list(width = 0.8, color = "#a6611a")
+          )
+        ) %>%
           plotly::layout(
             title = "3D MDS Plot",
             scene = list(
