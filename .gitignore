@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# R
+.Rhistory
+.Rapp.history
+.Rproj.user/
+*.Rproj
+
+# renv: commit the lockfile and activation script, ignore the machine-specific
+# library cache (users restore it via renv::restore()).
+renv/library/
+renv/local/
+renv/cellar/
+renv/staging/
+renv/python/
+
+# yamapData tarball — 257 MB, over GitHub's 100 MB per-file limit.
+# Users obtain it separately and place it at pipeline/data/ before running setup.R.
+# If you want it in the repo, set up Git LFS and remove this line.
+pipeline/data/yamapData_*.tar.gz
+
+# Pipeline run outputs (local, machine-specific)
+runs/
+*.log
+
+# Claude Code session state
+.claude/
+
+# Editor junk
+.vscode/
+.idea/
+*.swp
