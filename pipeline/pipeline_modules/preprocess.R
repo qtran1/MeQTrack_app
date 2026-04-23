@@ -58,12 +58,17 @@ read_sample_sheet <- function(sample_sheet_path) {
 #' @param rgset Raw data RGChannelSet
 #' @return String indicating array type (450k, EPIC, EPICv2)
 determine_array_type <- function(rgset) {
-  # Get number of probes
+  # Classify by RGChannelSet row count. These are raw red/green intensity
+  # rows (not CpG loci), so they're much larger than probe counts:
+  #   450K:    622,399 rows
+  #   EPIC:  1,051,943 rows
+  #   EPICv2:1,105,209 rows
+  # The thresholds below bracket these three known values with ~50k headroom.
   n_probes <- nrow(rgset)
-  
-  if (n_probes < 600000) {
+
+  if (n_probes < 700000) {
     return("450k")
-  } else if (n_probes < 900000) {
+  } else if (n_probes < 1080000) {
     return("EPIC")
   } else {
     return("EPICv2")

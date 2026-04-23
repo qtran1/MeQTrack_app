@@ -382,6 +382,16 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   message("Sample ", sample_id, " - Common probes with annotation: ", length(common_probes))
 
   if (length(common_probes) == 0) {
+    message("  rgset annotation: ",
+            paste(rgset@annotation, collapse = " / "))
+    message("  cnv_probes head: ",
+            paste(utils::head(cnv_probes, 6), collapse = ", "))
+    message("  anno_probes head: ",
+            paste(utils::head(anno_probes, 6), collapse = ", "))
+    message("  cnv_probes has '_' suffix in any of first 100: ",
+            any(grepl("_", utils::head(cnv_probes, 100))))
+    message("  anno_probes has '_' suffix in any of first 100: ",
+            any(grepl("_", utils::head(anno_probes, 100))))
     stop("No common probes found between sample and annotation for sample ", sample_id)
   }
 

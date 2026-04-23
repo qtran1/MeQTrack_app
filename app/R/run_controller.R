@@ -107,6 +107,7 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
       log_file    = NULL,
       stage       = NA_character_,         # currently running stage key
       stage_times = NULL,                  # named list: <stage> -> start POSIXct
+      stage_ends  = NULL,                  # named list: <stage> -> end POSIXct (NULL while running)
       stage_state = NULL,                  # named chr:  <stage> -> pending|running|done|failed
       started_at  = NULL,
       ended_at    = NULL,
@@ -121,6 +122,10 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
         names(RUN_STAGES)
       )
       rv$stage_times <- stats::setNames(
+        vector("list", length(RUN_STAGES)),
+        names(RUN_STAGES)
+      )
+      rv$stage_ends <- stats::setNames(
         vector("list", length(RUN_STAGES)),
         names(RUN_STAGES)
       )
@@ -196,9 +201,11 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
       rv$state     <- RUN_STATE_CANCELLED
       rv$ended_at  <- Sys.time()
 
-      # Mark the in-progress stage as failed (it was interrupted).
+      # Mark the in-progress stage as failed (it was interrupted) and
+      # freeze its elapsed time.
       if (!is.na(rv$stage) && !is.null(rv$stage_state)) {
         rv$stage_state[[rv$stage]] <- "failed"
+        rv$stage_ends[[rv$stage]]  <- rv$ended_at
       }
 
       quarantine_partial_outputs(rv$run_dir)
@@ -225,10 +232,11 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
 
         if (isTRUE(rv$exit_code == 0L)) {
           rv$state <- RUN_STATE_COMPLETED
+          # Close out the last running stage first, then mark all done.
           if (!is.na(rv$stage) && !is.null(rv$stage_state)) {
             rv$stage_state[[rv$stage]] <- "done"
+            rv$stage_ends[[rv$stage]]  <- rv$ended_at
           }
-          # All six stages done on a healthy run.
           rv$stage_state[] <- "done"
           rv$stage <- NA_character_
           rv$report_path <- discover_report(rv$run_dir)
@@ -236,6 +244,7 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
           rv$state <- RUN_STATE_FAILED
           if (!is.na(rv$stage) && !is.null(rv$stage_state)) {
             rv$stage_state[[rv$stage]] <- "failed"
+            rv$stage_ends[[rv$stage]]  <- rv$ended_at
           }
           rv$error_msg <- extract_last_error(lines)
         }
@@ -264,11 +273,13 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
     })
 
     output$stages_panel <- shiny::renderUI({
-      # Re-render every second while running so elapsed-time ticks update.
+      # Re-render every second while running so the elapsed-time of the
+      # currently-running stage ticks. Finished stages have a frozen end
+      # time, so their elapsed value is stable across re-renders.
       if (identical(rv$state, RUN_STATE_RUNNING)) {
         shiny::invalidateLater(1000, session)
       }
-      render_stages(rv$stage_state, rv$stage_times,
+      render_stages(rv$stage_state, rv$stage_times, rv$stage_ends,
                     current = rv$stage, run_state = rv$state)
     })
 
@@ -353,12 +364,14 @@ update_stage_progress <- function(rv, lines) {
   new_stage_key <- names(RUN_STAGES)[latest]
   if (identical(rv$stage, new_stage_key)) return(invisible())
 
-  # Close out the previous stage (if any) as done.
+  now <- Sys.time()
+  # Close out the previous stage (if any) as done and freeze its elapsed time.
   if (!is.na(rv$stage)) {
     rv$stage_state[[rv$stage]] <- "done"
+    rv$stage_ends[[rv$stage]]  <- now
   }
   # Mark all earlier stages done (in case we missed their start line because
-  # the log was truncated).
+  # the log was truncated). No timing info available for retroactive ones.
   if (latest > 1L) {
     for (i in seq_len(latest - 1L)) {
       k <- names(RUN_STAGES)[i]
@@ -369,11 +382,12 @@ update_stage_progress <- function(rv, lines) {
   }
   rv$stage <- new_stage_key
   rv$stage_state[[new_stage_key]] <- "running"
-  rv$stage_times[[new_stage_key]] <- Sys.time()
+  rv$stage_times[[new_stage_key]] <- now
+  rv$stage_ends[[new_stage_key]]  <- NULL
 }
 
 # Render the 6-row stage list.
-render_stages <- function(stage_state, stage_times, current, run_state) {
+render_stages <- function(stage_state, stage_times, stage_ends, current, run_state) {
   if (is.null(stage_state)) {
     return(shiny::tags$em("No run yet."))
   }
@@ -381,7 +395,9 @@ render_stages <- function(stage_state, stage_times, current, run_state) {
   rows <- lapply(names(RUN_STAGES), function(key) {
     state <- stage_state[[key]] %||% "pending"
     start <- stage_times[[key]]
-    elapsed <- if (is.null(start)) NA else as.numeric(difftime(now, start, units = "secs"))
+    end   <- stage_ends[[key]]
+    endpoint <- if (!is.null(end)) end else now
+    elapsed <- if (is.null(start)) NA else as.numeric(difftime(endpoint, start, units = "secs"))
 
     badge <- switch(
       state,
@@ -511,18 +527,24 @@ reveal_in_file_manager <- function(path) {
   invisible()
 }
 
-# Find the generated report HTML under <run_dir>/report/. Spec:
-#   meqtrack_<YYYYMMDD>_<stem>.html
+# Find the generated report HTML. The pipeline writes to <run_dir>/reports/
+# (plural) as methylation_analysis_report.html; the mvp-plan spec calls out
+# <run_dir>/report/meqtrack_*.html. Check both layouts so either works.
 discover_report <- function(run_dir) {
   if (is.null(run_dir)) return(NULL)
-  report_dir <- file.path(run_dir, "report")
-  if (!dir.exists(report_dir)) return(NULL)
-  files <- list.files(report_dir, pattern = "\\.html$", full.names = TRUE)
+  candidates <- c(
+    file.path(run_dir, "reports"),
+    file.path(run_dir, "report")
+  )
+  candidates <- candidates[dir.exists(candidates)]
+  if (!length(candidates)) return(NULL)
+  files <- unlist(lapply(candidates, function(d) {
+    list.files(d, pattern = "\\.html$", full.names = TRUE)
+  }))
   if (!length(files)) return(NULL)
-  # Prefer the pipeline's standard name; fall back to any .html.
-  mm <- grep("^meqtrack_", basename(files))
-  if (length(mm)) files <- files[mm]
-  # Newest first in case multiple reports exist.
+  # Prefer canonical pipeline filenames; fall back to any .html.
+  preferred <- grep("methylation_analysis_report|^meqtrack_", basename(files))
+  if (length(preferred)) files <- files[preferred]
   files[order(file.info(files)$mtime, decreasing = TRUE)][1]
 }
 
