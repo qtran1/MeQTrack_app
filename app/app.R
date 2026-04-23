@@ -35,19 +35,31 @@ source(file.path("R", "array_detect.R"),       local = FALSE)
 source(file.path("R", "samplesheet_module.R"), local = FALSE)
 source(file.path("R", "pipeline_bridge.R"),    local = FALSE)
 source(file.path("R", "run_controller.R"),     local = FALSE)
+source(file.path("R", "results_loader.R"),     local = FALSE)
+source(file.path("R", "qc_module.R"),          local = FALSE)
+source(file.path("R", "dimred_module.R"),      local = FALSE)
+source(file.path("R", "cnv_module.R"),         local = FALSE)
 
 # ---------------------------------------------------------------------------
 # First-launch workspace creation
 # ---------------------------------------------------------------------------
 WORKSPACE_PATH <- ensure_workspace()
 
+# Expose run outputs (PDFs, interactive HTML plots, etc.) to the browser
+# under a stable URL prefix. Every file under <workspace>/runs/ is reachable
+# at /runs/<path>. Result modules build iframe src URLs from here.
+addResourcePath("runs", file.path(WORKSPACE_PATH, "runs"))
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
 # Build module UI pieces once so we can drop slots into multiple layout
 # positions (sidebar vs main vs metadata card).
-ss_ui  <- samplesheet_ui("samplesheet")
-run_ui <- run_controller_ui("run")
+ss_ui     <- samplesheet_ui("samplesheet")
+run_ui    <- run_controller_ui("run")
+qc_ui     <- qc_module_ui("qc")
+dimred_ui <- dimred_module_ui("dimred")
+cnv_ui    <- cnv_module_ui("cnv")
 
 ui <- bslib::page_navbar(
   title = tags$span(
@@ -104,31 +116,22 @@ ui <- bslib::page_navbar(
   bslib::nav_panel(
     title = "QC", icon = icon("chart-column"),
     bslib::card(
-      bslib::card_header("QC view"),
-      bslib::card_body(
-        tags$p(tags$em(
-          "QC metrics and plots will appear here after Wave 3 introduces ",
-          "the run controller and Wave 4 wires in the result views."
-        ))
-      )
+      bslib::card_header("QC review"),
+      bslib::card_body(qc_ui, fillable = FALSE)
     )
   ),
   bslib::nav_panel(
     title = "Dim. reduction", icon = icon("diagram-project"),
     bslib::card(
       bslib::card_header("t-SNE / UMAP / Clustering"),
-      bslib::card_body(
-        tags$p(tags$em("Populated in Wave 4."))
-      )
+      bslib::card_body(dimred_ui, fillable = FALSE)
     )
   ),
   bslib::nav_panel(
     title = "CNV", icon = icon("dna"),
     bslib::card(
       bslib::card_header("CNV review"),
-      bslib::card_body(
-        tags$p(tags$em("Populated in Wave 4."))
-      )
+      bslib::card_body(cnv_ui, fillable = FALSE)
     )
   ),
   bslib::nav_panel(
@@ -168,6 +171,13 @@ server <- function(input, output, session) {
     workspace     = function() WORKSPACE_PATH,
     project_root_ = project_root
   )
+
+  # Wave 4: result views. results_loader emits a bundle when run_state flips
+  # to COMPLETED; modules render from that bundle and reset when it goes NULL.
+  results <- results_loader_server("results", run_state)
+  qc_module_server("qc",         results)
+  dimred_module_server("dimred", results)
+  cnv_module_server("cnv",       results)
 
   # Header status (top-right): once a run has started, surface its state;
   # otherwise fall back to samplesheet readiness.

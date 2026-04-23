@@ -6,6 +6,8 @@
 .Rapp.history
 .Rproj.user/
 *.Rproj
+# R's default graphics dump — harmless but noisy in diffs.
+Rplots.pdf
 
 # renv: commit the lockfile and activation script, ignore the machine-specific
 # library cache (users restore it via renv::restore()).
