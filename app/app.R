@@ -39,6 +39,7 @@ source(file.path("R", "results_loader.R"),     local = FALSE)
 source(file.path("R", "qc_module.R"),          local = FALSE)
 source(file.path("R", "dimred_module.R"),      local = FALSE)
 source(file.path("R", "cnv_module.R"),         local = FALSE)
+source(file.path("R", "report_module.R"),      local = FALSE)
 
 # ---------------------------------------------------------------------------
 # First-launch workspace creation
@@ -60,6 +61,7 @@ run_ui    <- run_controller_ui("run")
 qc_ui     <- qc_module_ui("qc")
 dimred_ui <- dimred_module_ui("dimred")
 cnv_ui    <- cnv_module_ui("cnv")
+report_ui <- report_module_ui("report")
 
 ui <- bslib::page_navbar(
   title = tags$span(
@@ -138,12 +140,7 @@ ui <- bslib::page_navbar(
     title = "Report", icon = icon("file-lines"),
     bslib::card(
       bslib::card_header("Report"),
-      bslib::card_body(
-        tags$p(tags$em(
-          "The run's HTML report is opened from the Run tab's ",
-          "\"Open report in browser\" action. An in-app preview arrives in Wave 4."
-        ))
-      )
+      bslib::card_body(report_ui, fillable = FALSE)
     )
   ),
   # -----------------------------------------------------------------
@@ -178,6 +175,7 @@ server <- function(input, output, session) {
   qc_module_server("qc",         results)
   dimred_module_server("dimred", results)
   cnv_module_server("cnv",       results)
+  report_module_server("report", results)
 
   # Header status (top-right): once a run has started, surface its state;
   # otherwise fall back to samplesheet readiness.
