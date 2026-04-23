@@ -188,14 +188,26 @@ scatter_dimred <- function(coords, sample_info, qc_fail_ids,
     plot_df[[color_by]]
   } else NULL
 
+  # Marker styling: fixed teal fill (#018571) when no metadata coloring is
+  # active; when the user picks a "Color by" column, the SCATTER_PALETTE
+  # takes over the fill. Border is always brown (#a6611a) for the
+  # teal/brown theme.
+  marker_list <- list(
+    size = 10,
+    opacity = 0.9,
+    line = list(width = 1, color = "#a6611a")
+  )
+  if (is.null(color_vec)) marker_list$color <- "#018571"
+
   fig <- plotly::plot_ly(
     data = plot_df,
     x = ~.x, y = ~.y,
     type = "scatter", mode = "markers",
     color = color_vec,
+    colors = SCATTER_PALETTE,
     symbol = ~.qc_status,
     symbols = c("QC pass" = "circle", "QC fail" = "triangle-up"),
-    marker = list(size = 10, line = list(width = 1, color = "#333")),
+    marker = marker_list,
     text = ~sprintf("<b>%s</b>", .id),
     hovertemplate = paste0(
       "%{text}<br>",
@@ -206,9 +218,9 @@ scatter_dimred <- function(coords, sample_info, qc_fail_ids,
     plotly::layout(
       xaxis = list(title = paste(kind, "1")),
       yaxis = list(title = paste(kind, "2")),
-      legend = list(orientation = "v"),
       margin = list(l = 50, r = 20, t = 20, b = 50)
-    )
+    ) |>
+    plotly_defaults()
   fig
 }
 
@@ -269,7 +281,7 @@ dendro_plotly <- function(hc, qc_fail_ids) {
     plotly::add_segments(
       x = seg$y, xend = seg$yend,
       y = seg$x, yend = seg$xend,
-      line = list(color = "#495057", width = 1.2),
+      line = list(color = COLORS$ink_500, width = 1.2),
       hoverinfo = "skip",
       showlegend = FALSE
     ) |>
@@ -280,8 +292,8 @@ dendro_plotly <- function(hc, qc_fail_ids) {
       textposition = "middle left",
       textfont = list(
         size  = 12,
-        color = ifelse(lab$is_fail, "#c82333", "#212529"),
-        family = "Helvetica, Arial, sans-serif"
+        color = ifelse(lab$is_fail, COLORS$fail, COLORS$ink_900),
+        family = "Inter, -apple-system, BlinkMacSystemFont, sans-serif"
       ),
       hovertext = ifelse(lab$is_fail,
                          paste0(lab$label, " (QC fail)"),
@@ -303,7 +315,8 @@ dendro_plotly <- function(hc, qc_fail_ids) {
         range = c(0.5, max(lab$x) + 0.5)
       ),
       margin = list(l = 10, r = 30, t = 20, b = 50)
-    )
+    ) |>
+    plotly_defaults()
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a

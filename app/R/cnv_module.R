@@ -184,8 +184,10 @@ cnv_segment_heatmap <- function(segments, qc_fail_ids, cap = 0.3) {
     ggplot2::geom_rect() +
     ggplot2::facet_grid(. ~ chr, scales = "free_x", space = "free_x",
                         switch = "x") +
-    ggplot2::scale_fill_gradient2(low = "#1f77b4", mid = "#f7f7f7",
-                                  high = "#d62728", midpoint = 0,
+    ggplot2::scale_fill_gradient2(low  = COLORS$cnv_loss,
+                                  mid  = COLORS$surface_1,
+                                  high = COLORS$cnv_gain,
+                                  midpoint = 0,
                                   limits = c(-cap, cap),
                                   name = "seg.mean") +
     ggplot2::scale_y_continuous(
@@ -194,18 +196,18 @@ cnv_segment_heatmap <- function(segments, qc_fail_ids, cap = 0.3) {
       expand = ggplot2::expansion(mult = 0)
     ) +
     ggplot2::labs(x = "Chromosome", y = NULL) +
-    ggplot2::theme_minimal() +
+    theme_meqtrack_gg(base_size = 11) +
     ggplot2::theme(
-      axis.text.x = ggplot2::element_blank(),
-      axis.ticks.x = ggplot2::element_blank(),
-      panel.grid = ggplot2::element_blank(),
-      panel.spacing.x = ggplot2::unit(0.1, "lines"),
-      strip.placement = "outside",
-      strip.text = ggplot2::element_text(size = 8),
-      legend.position = "bottom"
+      axis.text.x       = ggplot2::element_blank(),
+      axis.ticks.x      = ggplot2::element_blank(),
+      panel.grid        = ggplot2::element_blank(),
+      panel.spacing.x   = ggplot2::unit(0.1, "lines"),
+      strip.placement   = "outside",
+      strip.text        = ggplot2::element_text(size = 8, color = COLORS$ink_500),
+      legend.position   = "bottom"
     )
 
-  plotly::ggplotly(p, tooltip = "text")
+  plotly::ggplotly(p, tooltip = "text") |> plotly_defaults()
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a

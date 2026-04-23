@@ -411,11 +411,20 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   # Segment the data
   cnv_segment <- CNV.segment(cnv_detail)
   
-  # Plot genome-wide CNV profile
+  # Plot genome-wide CNV profile.
+  # `cols` is a 5-stop palette interpolated low→high (loss→neutral→gain):
+  # dark teal → light teal → neutral grey → light brown → dark brown.
+  # Matches the CNV heatmap's teal/brown diverging scheme.
   pdf_file <- file.path(plots_dir, paste0(clean_sample_id, "_cnv_profile.pdf"))
   pdf(pdf_file)
-  CNV.genomeplot(cnv_segment, main = clean_sample_id)
-  abline(h = c(-0.2, 0.2), lty = 2, col = "red")
+  CNV.genomeplot(
+    cnv_segment,
+    main = clean_sample_id,
+    cols = c("#018571", "#80cdc1", "#f5f5f5", "#dfc27d", "#a6611a")
+  )
+  # Gain/loss threshold lines: neutral grey so they don't clash with the
+  # new teal/brown palette.
+  abline(h = c(-0.2, 0.2), lty = 2, col = "grey50")
   dev.off()
   
   # Save segment results
@@ -638,9 +647,9 @@ source_freqplot_functions <- function() {
     
     rect(g.start, -1, g.end, 1, col=bg.col, border=bg.col)
     
-    rect(g.start, 0, g.end, 0 + (ngain/n.subj), col="red", border="red")
-    
-    rect(g.start, 0, g.end, 0 - (nloss/n.subj), col="blue", border="blue")
+    rect(g.start, 0, g.end, 0 + (ngain/n.subj), col="#a6611a", border="#a6611a")
+
+    rect(g.start, 0, g.end, 0 - (nloss/n.subj), col="#018571", border="#018571")
     
     mtext(plot.title, side=3, at=g.end[n.ints]/2, cex=1.3)
     mtext("% of Gain or Loss", side=2, at=0, cex=1.0)

@@ -56,20 +56,28 @@ qc_module_server <- function(id, results) {
       r <- results()
       if (is.null(r)) return(NULL)
       df <- r$qc_report
-      DT::datatable(
+      # Pass_QC can read as logical, character, or integer depending on the
+      # upstream CSV. Normalize to character "TRUE"/"FALSE" so DT's JS-side
+      # styleEqual match is deterministic.
+      if ("Pass_QC" %in% colnames(df)) {
+        df$Pass_QC <- ifelse(as.logical(df$Pass_QC), "TRUE", "FALSE")
+      }
+      dt <- DT::datatable(
         df,
         rownames = FALSE,
         selection = "none",
         class = "stripe hover compact",
         options = list(pageLength = 25, scrollX = TRUE)
-      ) |>
-        DT::formatStyle(
-          "Pass_QC",
-          target = "row",
+      )
+      if ("Pass_QC" %in% colnames(df)) {
+        dt <- DT::formatStyle(
+          dt, "Pass_QC", target = "row",
           backgroundColor = DT::styleEqual(
-            c(TRUE, FALSE), c("#ffffff", "#f8d7da")
+            c("TRUE", "FALSE"), c("#ffffff", "#fde2e4")
           )
         )
+      }
+      dt
     })
 
     output$density_frame <- shiny::renderUI({

@@ -29,6 +29,7 @@ suppressPackageStartupMessages({
 # shiny::runApp("app") sets the working directory to the app/ folder
 # before sourcing this file, so module paths are relative to app/.
 # project_root() in workspace.R walks up one level for pipeline paths.
+source(file.path("R", "theme.R"),              local = FALSE)
 source(file.path("R", "workspace.R"),          local = FALSE)
 source(file.path("R", "validators.R"),         local = FALSE)
 source(file.path("R", "array_detect.R"),       local = FALSE)
@@ -66,11 +67,12 @@ report_ui <- report_module_ui("report")
 ui <- bslib::page_navbar(
   title = tags$span(
     tags$strong("MeQTrack"),
-    tags$span(" — methylation analysis", class = "text-muted small ms-2")
+    tags$span(" — methylation analysis",
+              style = "color: #134e4a; font-size: 0.85rem; margin-left: .5rem; font-weight: 400;")
   ),
-  theme = bslib::bs_theme(
-    version = 5,
-    primary = "#2c7fb8"   # muted blue accent; neutral for data work
+  theme = APP_THEME,
+  header = tags$head(
+    tags$link(rel = "stylesheet", type = "text/css", href = "meqtrack.css")
   ),
   window_title = "MeQTrack",
   fillable = TRUE,
