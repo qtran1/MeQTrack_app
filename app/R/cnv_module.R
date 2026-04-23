@@ -34,6 +34,19 @@ cnv_module_ui <- function(id) {
     ),
     bslib::nav_panel(
       "Heatmap",
+      shiny::div(
+        class = "d-flex align-items-center gap-3 mb-2",
+        shiny::div(style = "width: 260px;",
+          shiny::sliderInput(
+            ns("heatmap_cap"),
+            label = shiny::tags$small("Color-scale cap (|seg.mean|)"),
+            min = 0.05, max = 1, value = 0.3, step = 0.05
+          )
+        ),
+        shiny::tags$small(class = "text-muted",
+          "Lower cap = more saturation for subtle gains/losses. ",
+          "Pipeline's call threshold is 0.18.")
+      ),
       plotly::plotlyOutput(ns("heatmap_plot"), height = "600px")
     )
   )
@@ -110,7 +123,8 @@ cnv_module_server <- function(id, results) {
         return(plotly::plot_ly() |>
                  plotly::layout(title = "No CNV segments available."))
       }
-      cnv_segment_heatmap(r$cnv$segments, r$qc_fail_ids)
+      cap <- input$heatmap_cap %||% 0.3
+      cnv_segment_heatmap(r$cnv$segments, r$qc_fail_ids, cap = cap)
     })
   })
 }
@@ -121,8 +135,9 @@ cnv_module_server <- function(id, results) {
 
 # Minimal genome-ordered segment heatmap. Rows = samples, x = segment
 # genomic coordinate (treating chromosomes as ordered stripes), fill =
-# seg.mean clamped to ±1.5.
-cnv_segment_heatmap <- function(segments, qc_fail_ids) {
+# seg.mean clamped to ±cap (default 0.3 matches typical methylation CNV
+# dynamic range; the pipeline calls gains/losses at |seg.mean| >= 0.18).
+cnv_segment_heatmap <- function(segments, qc_fail_ids, cap = 0.3) {
   df <- as.data.frame(segments)
   # Flexible column detection (pipeline & cnv_heatmap.R both touch these).
   col <- function(names, df) {
@@ -145,7 +160,7 @@ cnv_segment_heatmap <- function(segments, qc_fail_ids) {
     chr    = as.character(df[[c_chr]]),
     from   = as.numeric(df[[c_from]]),
     to     = as.numeric(df[[c_to]]),
-    mean   = pmax(pmin(as.numeric(df[[c_mean]]), 1.5), -1.5),
+    mean   = pmax(pmin(as.numeric(df[[c_mean]]), cap), -cap),
     stringsAsFactors = FALSE
   )
 
@@ -171,7 +186,7 @@ cnv_segment_heatmap <- function(segments, qc_fail_ids) {
                         switch = "x") +
     ggplot2::scale_fill_gradient2(low = "#1f77b4", mid = "#f7f7f7",
                                   high = "#d62728", midpoint = 0,
-                                  limits = c(-1.5, 1.5),
+                                  limits = c(-cap, cap),
                                   name = "seg.mean") +
     ggplot2::scale_y_continuous(
       breaks = seq_along(unique(df$sample_label)),
