@@ -16,10 +16,12 @@
 # ---------------------------------------------------------------------------
 
 # Size thresholds in bytes. Calibrated off typical _Grn.idat sizes.
+# Real EPIC v1 _Grn.idat files land at ~13.0-13.1 MB, so the EPIC upper
+# bound must sit above 13 MB to avoid misclassifying EPIC as EPICv2.
 ARRAY_SIZE_THRESHOLDS <- list(
   `450K`   = c(min =  5 * 1024^2, max = 10 * 1024^2),
-  `EPIC`   = c(min =  9 * 1024^2, max = 13 * 1024^2),
-  `EPICv2` = c(min = 13 * 1024^2, max = 20 * 1024^2)
+  `EPIC`   = c(min =  9 * 1024^2, max = round(13.8 * 1024^2)),
+  `EPICv2` = c(min = round(13.8 * 1024^2), max = 20 * 1024^2)
 )
 
 #' Guess array type from a Basename stem (expects _Grn.idat to exist).
