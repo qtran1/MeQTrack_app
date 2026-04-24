@@ -13,8 +13,8 @@
 #' @param output_dir Output directory for filtered files
 #' @param data_dir directory contains kept probes for each array type
 #' @return Filtered beta values matrix
-filter_probes <- function(beta_values, 
-                          array_type = "EPICv2", 
+filter_probes <- function(beta_values,
+                          array_type = "EPICv2",
                           detection_p = NULL,
                           detection_p_threshold = 0.05,
                           remove_sex_chromosomes = TRUE,
@@ -22,9 +22,12 @@ filter_probes <- function(beta_values,
                           remove_cross_reactive = TRUE,
                           keep_probe_list = NULL,
                           probe_list_column = "x",
-                          min_sample_success_rate = 0.3,
+                          min_sample_success_rate = 0.75,
                           output_dir = ".",
                           data_dir = "./data") {
+  # min_sample_success_rate = 0.75 matches default_config()$filtering$min_sample_success_rate.
+  # Keeps probes where >= 75% of samples have a valid call; tighten for
+  # stricter QC, loosen for small pilot datasets.
   
   original_probe_count <- nrow(beta_values)
   message(paste("Original probe count:", original_probe_count))
