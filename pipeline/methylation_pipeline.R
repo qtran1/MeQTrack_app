@@ -24,11 +24,11 @@ suppressPackageStartupMessages(library(optparse))
 
 MEQTRACK_VERSION <- "1.0.0"
 
-cat("┌─────────────────────────────────────────────────┐\n")
-cat("│                    MeQTrack                     │\n")
-cat("│ Methylation Array Quality Control and Analysis  │\n")
-cat("│               Version ", MEQTRACK_VERSION, "                   │\n")
-cat("└─────────────────────────────────────────────────┘\n\n")
+cat("┌───────────────────────────────────────────────────┐\n")
+cat("│                     MeQTrack                      │\n")
+cat("│ Methylation Quality control and analysis Tracking │\n")
+cat(sprintf("│                   Version %s                   │\n", MEQTRACK_VERSION))
+cat("└───────────────────────────────────────────────────┘\n\n")
 
 
 option_list <- list(
@@ -54,7 +54,7 @@ option_list <- list(
 opt_parser <- OptionParser(
   option_list = option_list,
   description = paste("MeQTrack v", MEQTRACK_VERSION, 
-                      "- Methylation Array Quality Control and Analysis Pipeline", sep = "")
+                      "- Methylation Quality control and analysis Tracking Pipeline", sep = "")
 )
 opt <- parse_args(opt_parser)
 

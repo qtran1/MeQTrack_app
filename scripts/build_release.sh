@@ -107,7 +107,16 @@ cp .Rprofile          "${stage_dir}/.Rprofile"
 cp setup.R            "${stage_dir}/setup.R"
 cp meqtrack.command   "${stage_dir}/meqtrack.command"
 cp meqtrack.bat       "${stage_dir}/meqtrack.bat"
-cp QUICKSTART.md      "${stage_dir}/QUICKSTART.md"
+
+# End-user documentation:
+#   README.md                       — orientation: what MeQTrack is + workflow
+#   QUICKSTART.md                   — install + run instructions
+#   meqtrack-mvp-requirements.md    — per-feature reference (F-1..F-12)
+# Internal docs (goals*.md, mvp-plan.md, docs/decisions/) stay out of
+# the release — they're developer notes, not user-facing.
+cp README.md                       "${stage_dir}/README.md"
+cp QUICKSTART.md                   "${stage_dir}/QUICKSTART.md"
+cp meqtrack-mvp-requirements.md    "${stage_dir}/meqtrack-mvp-requirements.md"
 
 # Make sure the macOS launcher is executable inside the zip.
 chmod +x "${stage_dir}/meqtrack.command"
@@ -126,6 +135,9 @@ required=(
   "setup.R"
   "meqtrack.command"
   "meqtrack.bat"
+  "README.md"
+  "QUICKSTART.md"
+  "meqtrack-mvp-requirements.md"
 )
 missing=()
 for path in "${required[@]}"; do
