@@ -1,6 +1,6 @@
 Read the ./pipeline/README.md file
 
-I want a single user MVP web app.
+I want a single user MVP web app. Create an interface that is approachable yet authoritative, visually engaging without sacrificing the trust and precision required for bioinformatics and clinical research workflows.
 
 The development process should look like this:
 
