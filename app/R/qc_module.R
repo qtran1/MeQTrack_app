@@ -67,7 +67,13 @@ qc_module_server <- function(id, results) {
         rownames = FALSE,
         selection = "none",
         class = "stripe hover compact",
-        options = list(pageLength = 25, scrollX = TRUE)
+        width = "100%",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          autoWidth = FALSE,
+          dom = "ltip"
+        )
       )
       if ("Pass_QC" %in% colnames(df)) {
         dt <- DT::formatStyle(

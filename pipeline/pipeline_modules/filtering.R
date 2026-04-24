@@ -28,7 +28,12 @@ filter_probes <- function(beta_values,
   # min_sample_success_rate = 0.75 matches default_config()$filtering$min_sample_success_rate.
   # Keeps probes where >= 75% of samples have a valid call; tighten for
   # stricter QC, loosen for small pilot datasets.
-  
+
+  # Canonicalize 450K -> 450k so callers using either capitalization
+  # resolve to the same probe-map key. UI uses "450K"; minfi/sesame
+  # conventions use "450k".
+  if (toupper(array_type) == "450K") array_type <- "450k"
+
   original_probe_count <- nrow(beta_values)
   message(paste("Original probe count:", original_probe_count))
   message(paste("Beta values dimensions:", nrow(beta_values), "x", ncol(beta_values)))
@@ -38,8 +43,8 @@ filter_probes <- function(beta_values,
   if (array_type == "auto") {
     n_probes <- nrow(beta_values)
     if (n_probes < 500000) {
-      array_type <- "450K"
-      message("Auto-detected array type: 450K")
+      array_type <- "450k"
+      message("Auto-detected array type: 450k")
     } else if (n_probes < 950000) {
       array_type <- "EPIC"
       message("Auto-detected array type: EPIC")
@@ -79,40 +84,76 @@ filter_probes <- function(beta_values,
   ## We used "min_sample_success_rate" in this case 
   if (!is.null(detection_p)) {
     message("Filtering probes by detection p-value...")
-    message("Biggest Detection p-value ", max(detection_p))
-    # Ensure probes are in the same order
-    if (nrow(detection_p) == nrow(beta_values) && 
+    message("Detection p shape: ", nrow(detection_p), " x ", ncol(detection_p),
+            " | beta shape: ", nrow(beta_values), " x ", ncol(beta_values))
+    message("Detection p rownames head: ",
+            paste(utils::head(rownames(detection_p), 3), collapse = ", "))
+    message("Beta rownames head:        ",
+            paste(utils::head(rownames(beta_values), 3), collapse = ", "))
+    message("Biggest Detection p-value ", max(detection_p, na.rm = TRUE))
+
+    # Align detection_p rows to beta_values rows. If the two probe-name
+    # spaces don't intersect at all, match() returns all NAs and the
+    # downstream filter would silently drop every probe — fail loudly
+    # instead so the user sees the manifest mismatch.
+    if (nrow(detection_p) == nrow(beta_values) &&
         all(rownames(detection_p) == rownames(beta_values))) {
       # Probes are already aligned
     } else {
+      n_overlap <- length(intersect(rownames(beta_values), rownames(detection_p)))
+      if (n_overlap == 0L) {
+        stop("Probe-name mismatch: detection_p and beta_values share 0 probe IDs.\n",
+             "  beta head:        ", paste(utils::head(rownames(beta_values), 3), collapse = ", "), "\n",
+             "  detection_p head: ", paste(utils::head(rownames(detection_p), 3), collapse = ", "), "\n",
+             "  Likely an EPICv2 manifest naming mismatch — recompute detection_p\n",
+             "  from the same rgset annotation used to compute beta_values.")
+      }
+      message("Detection p overlap with beta: ", n_overlap, " probes")
       detection_p <- detection_p[match(rownames(beta_values), rownames(detection_p)), ]
     }
-    message("The detection_p_threshold is ", detection_p_threshold, "\n")
-    # Keep probes that have passed detection p-value threshold in at least x% of samples
-    # Handle NA values properly by treating them as failed detection
+    message("The detection_p_threshold is ", detection_p_threshold)
+    # Convert to data.frame so the boolean assignment below works on all
+    # column types that detection_p might arrive in.
     detection_p <- as.data.frame(detection_p)
-  
-    ## Use detection p-value to determine if any probes are performing poorly and should be removed. 
-    ## We used 20% in this case which allows for one sample failure per probe 
-    # Finally, we can set all failed probes that have not been removed to NA in the beta table
-    detection_p[detection_p > 0.05] <- NA
 
-    ## Reorder pvals table to be same order as sample_table
+    # Mark failed probes as NA per sample (detection p above threshold).
+    # Honors the detection_p_threshold argument — was previously hardcoded 0.05.
+    detection_p[detection_p > detection_p_threshold] <- NA
+
+    # Reorder samples to match beta_values column order.
     detection_p <- detection_p[, match(colnames(beta_values), colnames(detection_p))]
 
-    ## Use detection p-value to determine if any probes are performing poorly and should be removed. 
-    row_Ps <- apply(detection_p, 1, function(x) {
-      sum(is.na(x))
-    })
+    # min_sample_success_rate is the FRACTION OF SAMPLES that must succeed
+    # for a probe to be kept. Remove probes where success rate < threshold,
+    # equivalently where the failure count > n_samples * (1 - threshold).
+    # Was previously inverted: removed when failures > n * threshold, which
+    # only dropped probes failing in more than 75% of samples.
+    n_samples <- ncol(detection_p)
+    max_allowed_failures <- n_samples * (1 - min_sample_success_rate)
+    row_Ps <- apply(detection_p, 1, function(x) sum(is.na(x)))
 
-    probes_to_remove <- which(row_Ps > ((ncol(detection_p) * min_sample_success_rate)))   
+    probes_to_remove <- which(row_Ps > max_allowed_failures)
     print(
       paste(
-        length(probes_to_remove) ,
-        "Probes failed by each having a detection P value > 0.05 in more than", min_sample_success_rate, "of samples",
+        length(probes_to_remove),
+        "probes removed: failed detection-p (>", detection_p_threshold,
+        ") in > ", round(100 * (1 - min_sample_success_rate)),
+        "% of samples (i.e. > ", round(max_allowed_failures, 2),
+        " of ", n_samples, " samples)",
         sep = " "
       )
     )
+
+    # Safety guard — if filtering wipes out essentially everything it's
+    # almost always a data shape / manifest mismatch upstream. Stop here
+    # so the user sees a real error instead of an opaque crash later.
+    n_remaining <- nrow(beta_values) - length(probes_to_remove)
+    if (n_remaining < 1000) {
+      stop(sprintf(
+        "Detection-p filter would leave only %d probes (started with %d).\n  Likely causes:\n  - Detection p values are mostly NA (manifest mismatch, see message above)\n  - min_sample_success_rate (%.2f) is too strict for n=%d samples\n  - All samples genuinely failed QC; check the QC tab",
+        n_remaining, nrow(beta_values), min_sample_success_rate, n_samples
+      ))
+    }
     ## Now we can remove these probes from the beta table and the detection p-values
     if (length(probes_to_remove) > 0){
       beta_v2.detP <- beta_values[-probes_to_remove, ]
@@ -139,13 +180,13 @@ filter_probes <- function(beta_values,
   }
 
   probe_file_map <- list(
-    "450K"   = file.path(data_dir, "keep.probes.450K.txt"),
+    "450k"   = file.path(data_dir, "keep.probes.450K.txt"),
     "EPIC"   = file.path(data_dir, "keep.probes.EPIC.txt"),
     "EPICv2" = file.path(data_dir, "keep.probes.EPICv2.txt")
   )
 
-  if (array_type == "450K") {
-    probe_file <- probe_file_map[["450K"]]
+  if (array_type == "450k") {
+    probe_file <- probe_file_map[["450k"]]
   } else if (array_type == "EPIC") {
     message("EPIC was selected.")
     probe_file <- probe_file_map[["EPIC"]]
@@ -240,8 +281,9 @@ filter_probes <- function(beta_values,
 #' @param data_dir    Directory containing the keep.probes.*.txt files.
 #' @return  Path to the probe list file, or NULL if not found.
 get_array_probe_list <- function(array_type, data_dir = "./data") {
+  if (toupper(array_type) == "450K") array_type <- "450k"
   probe_files <- list(
-    "450K"   = file.path(data_dir, "keep.probes.450K.txt"),
+    "450k"   = file.path(data_dir, "keep.probes.450K.txt"),
     "EPIC"   = file.path(data_dir, "keep.probes.EPIC.txt"),
     "EPICv2" = file.path(data_dir, "keep.probes.EPICv2.txt")
   )

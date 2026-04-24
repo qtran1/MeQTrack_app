@@ -82,11 +82,15 @@ determine_array_type <- function(rgset) {
 load_array_annotation <- function(array_type) {
   # Handle auto-detection
   if (array_type == "auto") {
-    warning("Array type 'auto' is not valid for loading annotations directly. 
+    warning("Array type 'auto' is not valid for loading annotations directly.
             Please determine the specific array type first or specify it explicitly.")
     array_type <- "EPIC"  # Default to EPIC as fallback
   }
-  
+  # Canonicalize 450K -> 450k (minfi manifest convention). Case mismatch
+  # between the UI ("450K") and this pipeline ("450k") was a repeat
+  # source of "Unsupported array type" errors.
+  if (toupper(array_type) == "450K") array_type <- "450k"
+
   # Check for valid array types
   if (!array_type %in% c("450k", "EPIC", "EPICv2")) {
     stop("Unsupported array type: ", array_type, 
@@ -183,7 +187,9 @@ read_methylation_data <- function(sample_sheet, array_type = "auto") {
     array_type <- determine_array_type(rgset)
     message("Auto-detected array type: ", array_type)
   }
-  
+  # Canonicalize 450K -> 450k so callers using either capitalization work.
+  if (toupper(array_type) == "450K") array_type <- "450k"
+
   if (array_type == "450k") {
     rgset@annotation <- c(array = "IlluminaHumanMethylation450k", 
                          annotation = "ilmn12.hg19")
@@ -272,8 +278,35 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   beta <- beta_v2[, match(sample_sheet$Sentrix_ID, colnames(beta_v2))]
   message("Number of rows in beta: ", nrow(beta))
 
-  ## Reorder detection_p table to be same order as sample_table
-  detection_p <- sesame::openSesame(sample_sheet$Basename, func = pOOBAH, return.pval = TRUE, BPPARAM=bpparam)
+  ## openSesame(..., func = pOOBAH) doesn't accept collapseToPfx /
+  ## collapseMethod in some sesame versions (they get forwarded to
+  ## pOOBAH and error out as unused args). Instead we let pOOBAH run
+  ## at the per-replicate granularity and then collapse manually to
+  ## match beta's per-CpG space for EPICv2.
+  detection_p <- sesame::openSesame(sample_sheet$Basename, func = pOOBAH,
+                                    return.pval = TRUE, BPPARAM = bpparam)
+
+  if (array_type == "EPICv2" &&
+      any(grepl("_(BC|TC)\\d+$", utils::head(rownames(detection_p), 200)))) {
+    message("Collapsing EPICv2 detection_p replicates -> one row per CpG (mean)...")
+    dp_base <- sub("_.*$", "", rownames(detection_p))
+    if (anyDuplicated(dp_base)) {
+      # Per-CpG mean across replicates. rowsum() sums by group; divide
+      # by per-group valid-count (non-NA) to get a correct mean.
+      dp_mat <- as.matrix(detection_p)
+      not_na <- !is.na(dp_mat)
+      dp_mat[!not_na] <- 0
+      sums   <- rowsum(dp_mat, dp_base)
+      counts <- rowsum(matrix(as.numeric(not_na), nrow(dp_mat), ncol(dp_mat)),
+                       dp_base)
+      agg <- sums / counts
+      agg[counts == 0] <- NA  # avoid NaN where every replicate was NA
+      detection_p <- agg
+    }
+    message("Post-collapse detection_p shape: ",
+            nrow(detection_p), " x ", ncol(detection_p))
+  }
+
   detection_p_df = as.data.frame(detection_p)
   detection_p_df <- detection_p_df[, match(sample_sheet$Sentrix_ID, colnames(detection_p_df))]
   message("Number of rows in detection_p: ", nrow(detection_p)) 
