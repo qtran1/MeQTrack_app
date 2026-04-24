@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# scripts/build_release.sh — Build a distributable zip of MeQTrack_app.
+#
+# What goes in:
+#   app/            full Shiny app
+#   pipeline/       pipeline R code, example data, yamapData_*.tar.gz
+#   renv.lock       package lockfile
+#   renv/           only activate.R, settings.json, .gitignore (NOT library/)
+#   .Rprofile       activates renv on R startup
+#   setup.R         first-launch package provisioning
+#   meqtrack.command, meqtrack.bat   double-click launchers
+#   QUICKSTART.md   end-user install guide
+#
+# What stays out:
+#   renv/library/   machine-specific package cache (built on first launch)
+#   runs/           local pipeline output
+#   .git/, .DS_Store, *.Rhistory, .vscode/, .idea/, etc.
+#
+# Output: dist/MeQTrack_app-<git-sha>-<date>.zip
+#
+# Usage:
+#   bash scripts/build_release.sh
+#
+# Run from any directory; the script resolves paths relative to itself.
+
+set -euo pipefail
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." &> /dev/null && pwd )"
+
+cd "${PROJECT_ROOT}"
+
+echo "=============================================================="
+echo "  MeQTrack release builder"
+echo "  Project: ${PROJECT_ROOT}"
+echo "=============================================================="
+
+# ---------------------------------------------------------------------------
+# 1. Preflight
+# ---------------------------------------------------------------------------
+yamap_tarball="pipeline/data/yamapData_0.0.3.tar.gz"
+if [ ! -f "${yamap_tarball}" ]; then
+  cat >&2 <<EOS
+ERROR: ${yamap_tarball} is missing.
+
+The yamapData tarball is gitignored because of its size (~257 MB), but
+the release zip MUST include it — without it the CNV step has no
+internal reference and setup.R will refuse to run.
+
+Place the tarball at ${yamap_tarball} and re-run this script.
+EOS
+  exit 1
+fi
+
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "ERROR: rsync is required (preinstalled on macOS / Linux)." >&2
+  exit 1
+fi
+if ! command -v zip >/dev/null 2>&1; then
+  echo "ERROR: zip is required (preinstalled on macOS / Linux)." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Compute release name (git-sha + date if in a repo, else just date).
+# ---------------------------------------------------------------------------
+release_date="$(date +%Y%m%d)"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git_sha="$(git rev-parse --short HEAD)"
+  release_tag="${git_sha}-${release_date}"
+else
+  release_tag="${release_date}"
+fi
+release_name="MeQTrack_app-${release_tag}"
+
+dist_dir="${PROJECT_ROOT}/dist"
+stage_dir="${dist_dir}/${release_name}"
+zip_path="${dist_dir}/${release_name}.zip"
+
+mkdir -p "${dist_dir}"
+rm -rf "${stage_dir}" "${zip_path}"
+mkdir -p "${stage_dir}"
+
+# ---------------------------------------------------------------------------
+# 3. Stage files via rsync. Each entry mirrored into stage_dir, with the
+#    big-pile excludes applied to renv/.
+# ---------------------------------------------------------------------------
+echo
+echo "Staging into ${stage_dir} ..."
+
+rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
+  app/ "${stage_dir}/app/"
+
+rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
+  pipeline/ "${stage_dir}/pipeline/"
+
+# renv/: ship activator, settings, and .gitignore only — never library/.
+mkdir -p "${stage_dir}/renv"
+for f in activate.R settings.json .gitignore; do
+  if [ -f "renv/${f}" ]; then
+    cp "renv/${f}" "${stage_dir}/renv/${f}"
+  fi
+done
+
+cp renv.lock          "${stage_dir}/renv.lock"
+cp .Rprofile          "${stage_dir}/.Rprofile"
+cp setup.R            "${stage_dir}/setup.R"
+cp meqtrack.command   "${stage_dir}/meqtrack.command"
+cp meqtrack.bat       "${stage_dir}/meqtrack.bat"
+cp QUICKSTART.md      "${stage_dir}/QUICKSTART.md"
+
+# Make sure the macOS launcher is executable inside the zip.
+chmod +x "${stage_dir}/meqtrack.command"
+
+# ---------------------------------------------------------------------------
+# 4. Sanity-check key files are present in the staged tree.
+# ---------------------------------------------------------------------------
+required=(
+  "app/app.R"
+  "pipeline/methylation_pipeline.R"
+  "pipeline/data/yamapData_0.0.3.tar.gz"
+  "pipeline/data/keep.probes.EPIC.txt"
+  "renv.lock"
+  "renv/activate.R"
+  ".Rprofile"
+  "setup.R"
+  "meqtrack.command"
+  "meqtrack.bat"
+)
+missing=()
+for path in "${required[@]}"; do
+  if [ ! -e "${stage_dir}/${path}" ]; then
+    missing+=("${path}")
+  fi
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo "ERROR: required files missing from staged tree:" >&2
+  printf '  %s\n' "${missing[@]}" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Zip and report.
+# ---------------------------------------------------------------------------
+echo
+echo "Zipping to ${zip_path} ..."
+( cd "${dist_dir}" && zip -qr "${release_name}.zip" "${release_name}" )
+
+# Tear down the staging dir; the zip is the artifact we keep.
+rm -rf "${stage_dir}"
+
+zip_size_h="$(du -h "${zip_path}" | awk '{print $1}')"
+file_count="$(unzip -l "${zip_path}" | tail -1 | awk '{print $2}')"
+
+cat <<EOS
+
+==============================================================
+  Release built.
+
+  Path: ${zip_path}
+  Size: ${zip_size_h}
+  Files: ${file_count}
+
+  Test instructions for a clean machine:
+    1. unzip ${release_name}.zip
+    2. cd ${release_name}
+    3. macOS:   double-click meqtrack.command
+       Windows: double-click meqtrack.bat
+==============================================================
+EOS

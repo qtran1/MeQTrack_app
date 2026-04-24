@@ -52,7 +52,29 @@ if errorlevel 1 (
   echo.
 )
 
-REM 3. Start Shiny.
+REM 3. First-launch provisioning. The distribution zip ships renv.lock and
+REM    renv\activate.R but NOT the renv\library\ cache (machine-specific,
+REM    would balloon the zip). On first launch we populate the library via
+REM    setup.R (idempotent — no-op when already provisioned).
+if not exist "renv\library\NUL" (
+  echo.
+  echo   First-time setup: installing R packages.
+  echo   This takes 5-15 minutes on first run; subsequent launches are instant.
+  echo   Watch this window for progress; the app starts automatically when done.
+  echo.
+  Rscript setup.R
+  if errorlevel 1 (
+    echo.
+    echo   ERROR: setup.R failed. See the messages above.
+    pause
+    exit /b 1
+  )
+  echo.
+  echo   Setup complete. Starting the app...
+  echo.
+)
+
+REM 4. Start Shiny.
 echo Starting Shiny server on http://127.0.0.1 ...
 echo (Close this window to stop the app.)
 echo.

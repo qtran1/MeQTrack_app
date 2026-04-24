@@ -26,6 +26,9 @@ pipeline/data/yamapData_*.tar.gz
 runs/
 *.log
 
+# Release artifacts produced by scripts/build_release.sh
+dist/
+
 # Claude Code session state
 .claude/
 
