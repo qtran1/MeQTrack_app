@@ -15,13 +15,18 @@
 # analysis. The user can always override via the dropdown.
 # ---------------------------------------------------------------------------
 
-# Size thresholds in bytes. Calibrated off typical _Grn.idat sizes.
-# Real EPIC v1 _Grn.idat files land at ~13.0-13.1 MB, so the EPIC upper
-# bound must sit above 13 MB to avoid misclassifying EPIC as EPICv2.
+# Size thresholds in bytes, expressed in decimal MB to match what
+# macOS Finder / Windows Explorer report (1 MB = 1,000,000 bytes).
+# Observed real _Grn.idat sizes from the bundled examples:
+#   EPIC v1 (GSM3735546_201465940014_R01C01): ~13.68 MB
+#   EPICv2  (209251850130_R03C01):            ~14.37 MB
+# These differ by ~0.7 MB; boundary sits at 14.0 MB (midpoint). If
+# real-world IDATs land in the dead zone around 14.0 MB, switch to a
+# manifest-header parse (illuminaio::readIDAT) instead of size.
 ARRAY_SIZE_THRESHOLDS <- list(
-  `450K`   = c(min =  5 * 1024^2, max = 10 * 1024^2),
-  `EPIC`   = c(min =  9 * 1024^2, max = round(13.8 * 1024^2)),
-  `EPICv2` = c(min = round(13.8 * 1024^2), max = 20 * 1024^2)
+  `450K`   = c(min =  5e6, max = 10e6),
+  `EPIC`   = c(min = 10e6, max = 14e6),
+  `EPICv2` = c(min = 14e6, max = 20e6)
 )
 
 #' Guess array type from a Basename stem (expects _Grn.idat to exist).
@@ -39,12 +44,12 @@ detect_array_from_idat <- function(basename_stem) {
     th <- ARRAY_SIZE_THRESHOLDS[[arr]]
     if (sz >= th["min"] && sz < th["max"]) {
       return(list(array_type = arr, size = sz,
-                  reason = sprintf("IDAT size %.1f MB", sz / 1024^2)))
+                  reason = sprintf("IDAT size %.1f MB", sz / 1e6)))
     }
   }
   list(array_type = NA_character_, size = sz,
        reason = sprintf("IDAT size %.1f MB outside known ranges",
-                        sz / 1024^2))
+                        sz / 1e6))
 }
 
 #' Infer the array type for a validated samplesheet.
