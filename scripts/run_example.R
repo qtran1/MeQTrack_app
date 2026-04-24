@@ -1,7 +1,7 @@
 # scripts/run_example.R — Wave 1 smoke test.
 #
 # Runs the pipeline end-to-end on the bundled example samplesheet:
-#   pipeline/data/example/samplesheet_epic_8.csv
+#   pipeline/data/example/samplesheet_epic.csv
 #
 # Usage (from the project root):
 #   Rscript scripts/run_example.R
@@ -22,7 +22,7 @@ if (file.exists("renv/activate.R")) {
 project_root <- normalizePath(".", winslash = "/")
 pipeline_script <- file.path(project_root, "pipeline", "methylation_pipeline.R")
 samplesheet <- file.path(
-  project_root, "pipeline", "data", "example", "samplesheet_epic_8.csv"
+  project_root, "pipeline", "data", "example", "samplesheet_epic.csv"
 )
 data_dir <- file.path(project_root, "pipeline", "data")
 

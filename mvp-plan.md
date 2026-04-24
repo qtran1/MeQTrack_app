@@ -167,7 +167,7 @@ The plan follows the rolling-wave convention: near-term work is sized to concret
 
 - W1-T1. Initialize `renv` at the project root; restore Bioconductor deps pinned to a single release.
 - W1-T2. Add `yamapData_0.0.3.tar.gz` to `pipeline/data/` and wire its installation through `renv` (local source entry in `renv.lock`). **This is currently blocking an end-to-end run** (see `pipeline/README.md` caveats).
-- W1-T3. Run the pipeline on `pipeline/data/example/samplesheet_epic_8.csv` with `--step all` from a plain R session on the user's machine and confirm the expected output tree.
+- W1-T3. Run the pipeline on `pipeline/data/example/samplesheet_epic.csv` with `--step all` from a plain R session on the user's machine and confirm the expected output tree.
 - W1-T4. Write `pipeline_bridge.R` that runs the pipeline via `callr::r_bg` and streams logs to disk; prove it works from a plain R script.
 - W1-T5. Decide report approach for MVP: keep the existing `generate_report()` rmarkdown path, or replace with a Shiny-rendered flat HTML. Default: keep existing, revisit in Wave 3 if it feels rigid.
 - **W1-GATE. Demo + approval.** The user runs `Rscript` on the example samplesheet from their own machine and opens the resulting HTML report.
