@@ -31,43 +31,73 @@ load_config <- function(config_file) {
 #'
 #' @return Default configuration list
 default_config <- function() {
+  # Structure matches the nested keys that run_pipeline() actually reads:
+  #   config$preprocessing$normalization
+  #   config$qc$<...>
+  #   config$filtering$<...>
+  #   config$dim_reduction$variable_probes / $tsne$... / $umap$... / $clustering$...
+  #   config$cnv$<...>
+  # Prior flat-key form was silently ignored — this restructure removes the
+  # divergence. Flat-key fallbacks remain in run_pipeline (e.g. for legacy
+  # `config$normalization`) so old config files still load.
   list(
-    # Input
-    sample_sheet = "sample_sheet.csv",
+    # Input (top-level — read directly on config$)
+    sample_sheet      = "sample_sheet.csv",
     reference_samples = NULL,
-    
+    data_dir          = "./data",
+
     # Preprocessing
-    normalization = "functional", # Options: raw, illumina, functional, quantile, swan
-    
+    preprocessing = list(
+      normalization = "swan"   # Options: raw, illumina, functional, quantile, swan
+    ),
+
     # QC
-    detection_p_threshold          = 0.01,
-    sample_detection_p_threshold   = 0.05,
-    failed_probe_percent_threshold = 25,
-    min_median_intensity           = 10.5,
-    filter_failed_samples          = TRUE,
-    
+    qc = list(
+      detection_p_threshold          = 0.01,
+      sample_detection_p_threshold   = 0.05,
+      failed_probe_percent_threshold = 25,
+      min_median_intensity           = 10.5,
+      filter_failed_samples          = TRUE
+    ),
+
     # Probe filtering
-    remove_sex_chromosomes = TRUE,
-    remove_snps = TRUE,
-    remove_cross_reactive = TRUE,
-    min_sample_success_rate = 0.75,
-    
+    filtering = list(
+      remove_sex_chromosomes  = TRUE,
+      remove_snps             = TRUE,
+      remove_cross_reactive   = TRUE,
+      min_sample_success_rate = 0.75,
+      keep_probe_list         = NULL,
+      probe_list_column       = "x"
+    ),
+
     # Dimensionality reduction
-    variable_probes = 10000,
-    tsne_perplexity = 5,
-    tsne_dimensions = 2,
-    umap_neighbors = 15,
-    clustering_method = "complete",
-    clustering_distance = "pearson",
-    
+    dim_reduction = list(
+      variable_probes = 10000,
+      tsne = list(
+        perplexity = 5,    # Safe for small cohorts (N < ~15).
+        dimensions = 2
+      ),
+      umap = list(
+        n_neighbors = 15
+      ),
+      clustering = list(
+        method   = "complete",   # single / complete / average / ward.D2
+        distance = "pearson"     # pearson / spearman / euclidean / manhattan
+      )
+    ),
+
     # CNV analysis
-    cnv_method = "conumee", # Options: conumee, ChAMP, cnAnalysis450k
-    cnv_threshold = 0.18,
-    cnv_frequency_plot = TRUE,
-    
+    cnv = list(
+      method         = "conumee",   # Options: conumee, ChAMP, cnAnalysis450k
+      threshold      = 0.18,
+      frequency_plot = TRUE
+    ),
+
     # Output
-    include_interactive_plots = TRUE,
-    generate_report = TRUE
+    output = list(
+      include_interactive_plots = TRUE,
+      generate_report           = TRUE
+    )
   )
 }
 

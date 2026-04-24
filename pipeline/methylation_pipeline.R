@@ -330,13 +330,13 @@ run_pipeline <- function(step) {
       }
     }
     
-    # Get filtering parameters
-    remove_sex_chromosomes <- TRUE  # Default value
-    remove_snps <- TRUE  # Default value
-    remove_cross_reactive <- TRUE  # Default value
-    min_sample_success_rate <- config$filtering$min_sample_success_rate  # Default value
-    keep_probe_list <- NULL  # Default value
-    probe_list_column <- "x"  # Default value
+    # Get filtering parameters (local fallbacks; overridden by config$filtering$* below)
+    remove_sex_chromosomes  <- TRUE
+    remove_snps             <- TRUE
+    remove_cross_reactive   <- TRUE
+    min_sample_success_rate <- 0.75     # matches default_config()$filtering$min_sample_success_rate
+    keep_probe_list         <- NULL
+    probe_list_column       <- "x"
     
     if (!is.null(config$filtering)) {
       if (!is.null(config$filtering$remove_sex_chromosomes)) {

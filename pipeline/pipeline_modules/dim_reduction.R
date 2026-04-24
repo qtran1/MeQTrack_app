@@ -49,10 +49,13 @@ select_variable_probes <- function(beta, n_probes = 10000, method = "sd") {
 #' @return            List with elements: coords, sample_info, duplicates.
 run_tsne <- function(beta,
                      sample_info,
-                     perplexity  = 30,
+                     perplexity  = 5,
                      dimensions  = 2,
                      output_dir  = ".",
                      plots_dir   = NULL) {
+  # Perplexity default of 5 matches default_config()$dim_reduction$tsne$perplexity
+  # and is safe for small cohorts (Rtsne requires perplexity < (N-1)/3).
+  # Users with larger N should override via config or the Settings UI.
 
   suppressPackageStartupMessages(library(Rtsne))
   suppressPackageStartupMessages(library(ggplot2))

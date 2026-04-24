@@ -245,7 +245,7 @@ Scoped at a theme level; tasks will be sharpened as Wave 5 completes. Each theme
 - Theme 6a. Robustness: handle mid-run disk-full, corrupt IDAT pair, OOM on large runs, partial pipeline failures that the existing modules don't already catch.
 - Theme 6b. Run library: a minimal "Past runs" tab listing `runs/*/run_manifest.json` so the user can re-open a report without navigating the filesystem.
 - Theme 6c. Documentation: a short in-app "Getting started" page and a two-page external quickstart.
-- Theme 6d. Tunable parameters (only if the W4-GATE decision flagged this as needed): build a minimal Settings surface for the parameters the user called out.
+- Theme 6d. Tunable parameters (**confirmed needed at W4-GATE, 2026-04-23**): build a minimal Settings surface covering at least detection-p threshold, `n_variable_probes`, and t-SNE perplexity — plus any additional pipeline parameters identified during Wave 6 scoping. Defaults stay at the pipeline's current values; the Settings surface persists per-run (recorded in `run_manifest.json`) so re-runs are reproducible.
 - Theme 6e. Stage 2 packaging: wrap the Stage 1 launcher in a `Platypus` .app bundle (macOS) and/or an `electricShine` installer (Windows), only if Stage 1 is not adequate.
 
 ### Cross-cutting risks & watch items
