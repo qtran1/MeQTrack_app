@@ -36,16 +36,30 @@ read_samplesheet <- function(path) {
     return(list(ok = FALSE, error = paste("Samplesheet not found:", path),
                 df = NULL, samplesheet_dir = NULL))
   }
+  # fileEncoding = "UTF-8-BOM" strips an optional UTF-8 BOM (common on
+  # Excel/Numbers-exported CSVs); harmless for plain ASCII files.
+  # Don't swallow warnings into NULL — read.csv routinely warns on
+  # incomplete-final-line and similar non-fatal quirks; treat the parse
+  # as successful as long as it returns a data frame with rows.
   df <- tryCatch(
-    utils::read.csv(path, stringsAsFactors = FALSE, check.names = TRUE),
-    error = function(e) NULL,
-    warning = function(w) NULL
+    utils::read.csv(path, stringsAsFactors = FALSE, check.names = TRUE,
+                    fileEncoding = "UTF-8-BOM"),
+    error = function(e) NULL
   )
+  if (is.null(df)) {
+    df <- tryCatch(
+      utils::read.csv(path, stringsAsFactors = FALSE, check.names = TRUE),
+      error = function(e) NULL
+    )
+  }
   if (is.null(df) || nrow(df) == 0L) {
     return(list(ok = FALSE,
                 error = "Samplesheet is empty or could not be parsed as CSV.",
                 df = NULL, samplesheet_dir = NULL))
   }
+  # Defensive BOM strip on first column name in case the encoding hint
+  # didn't catch it (rare older R versions).
+  colnames(df)[1] <- sub("^\\xef\\xbb\\xbf|^﻿", "", colnames(df)[1])
   missing_cols <- setdiff(REQUIRED_COLUMNS, colnames(df))
   if (length(missing_cols)) {
     return(list(
@@ -80,12 +94,39 @@ resolve_basename <- function(basename, samplesheet_dir, pipeline_dir) {
   if (!nzchar(basename)) {
     return(list(resolved = NA_character_, tried = character(0)))
   }
-  # Absolute path — trust as-is.
+  # Absolute path — try as-is first; if the IDATs aren't there (common
+  # when a samplesheet was authored on a different machine), fall back
+  # to looking for the same filename stem in the samplesheet dir or the
+  # pipeline dir.
   is_abs <- startsWith(basename, "/") || grepl("^[A-Za-z]:[/\\\\]", basename)
   if (is_abs) {
+    abs_red <- paste0(basename, "_Red.idat")
+    abs_grn <- paste0(basename, "_Grn.idat")
+    if (file.exists(abs_red) && file.exists(abs_grn)) {
+      return(list(
+        resolved = normalizePath(basename, winslash = "/", mustWork = FALSE),
+        tried = basename
+      ))
+    }
+    # Fall through to the same dir-fallback used for relative paths,
+    # using just the stem (final path component).
+    stem <- basename(basename)
+    fallback <- c(
+      file.path(samplesheet_dir, stem),
+      file.path(pipeline_dir,    stem)
+    )
+    for (cand in fallback) {
+      if (file.exists(paste0(cand, "_Red.idat")) &&
+          file.exists(paste0(cand, "_Grn.idat"))) {
+        return(list(
+          resolved = normalizePath(cand, winslash = "/", mustWork = FALSE),
+          tried = c(basename, fallback)
+        ))
+      }
+    }
     return(list(
       resolved = normalizePath(basename, winslash = "/", mustWork = FALSE),
-      tried = basename
+      tried = c(basename, fallback)
     ))
   }
   # Relative — try samplesheet dir, then pipeline dir.
