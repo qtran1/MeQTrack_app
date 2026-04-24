@@ -1,3 +1,11 @@
+**STATUS: COMPLETE — 2026-04-23.** Delivered through Wave 5: MVP web app
+shipped as a zip with double-click launchers. All five waves
+(Foundation, UI shell, Run controller, Result views, Packaging) approved
+by the user. UI Phase A (typography + teal palette + plot theme
+harmonization) also landed. New work tracked in `goals_v3.md`.
+
+---
+
 Read the ./pipeline/README.md file
 
 I want a single user MVP web app. Create an interface that is approachable yet authoritative, visually engaging without sacrificing the trust and precision required for bioinformatics and clinical research workflows.
