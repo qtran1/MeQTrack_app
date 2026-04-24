@@ -370,7 +370,29 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   
   # Load CNV data
   cnv_data <- CNV.load(sub_mset)
-  
+
+  # EPICv2 samples come out of CNV.load with per-replicate rownames
+  # (cg25324105_BC11, cg25324105_TC11, ...) while the CNV annotation
+  # and the internal yamapData reference use plain EPIC cg-IDs.
+  # Collapse replicates to one row per CpG (mean intensity across
+  # replicates) so the three probe spaces align for CNV.fit.
+  cnv_probes_raw <- rownames(cnv_data@intensity)
+  if (any(grepl("_(BC|TC)\\d+$", utils::head(cnv_probes_raw, 200)))) {
+    message("  Collapsing EPICv2 replicate probes in sample cnv_data (mean)...")
+    base_ids <- sub("_.*$", "", cnv_probes_raw)
+    int_mat  <- as.matrix(cnv_data@intensity)
+    not_na   <- !is.na(int_mat)
+    int_mat[!not_na] <- 0
+    sums   <- rowsum(int_mat, base_ids)
+    counts <- rowsum(matrix(as.numeric(not_na), nrow(int_mat), ncol(int_mat)),
+                     base_ids)
+    agg <- sums / counts
+    agg[counts == 0] <- NA  # avoid NaN when every replicate was NA
+    # CNV.data's @intensity slot requires a data.frame, not a matrix.
+    cnv_data@intensity <- as.data.frame(agg)
+    message("  After collapse: ", nrow(cnv_data@intensity), " probes")
+  }
+
   # Subset query to exactly the probes present in the annotation (which has already
   # been aligned to the reference controls). CNV.fit requires query, reference, and
   # annotation to share the same probe set.
