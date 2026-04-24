@@ -50,7 +50,7 @@ Rscript scripts/run_example.R
 ```
 
 This invokes `pipeline/methylation_pipeline.R` with `--step all` against
-`pipeline/data/example/samplesheet_epic_8.csv` and writes output to
+`pipeline/data/example/samplesheet_epic.csv` and writes output to
 `runs/example_<timestamp>/`.
 
 Expected output tree:
@@ -134,7 +134,7 @@ On first launch the app creates `~/MeQTrack/` with subfolders
 `samplesheets/`, `idats/`, and `runs/`. This is the default place to put
 your own data; the app also exposes the project folder so you can pick the
 bundled example samplesheet at
-`pipeline/data/example/samplesheet_epic_8.csv`.
+`pipeline/data/example/samplesheet_epic.csv`.
 
 ## Wave 2 acceptance checklist
 
@@ -143,7 +143,7 @@ Work through this against the running app (W2-GATE in `mvp-plan.md` §3):
 - [ ] Double-clicking `meqtrack.command` (or `meqtrack.bat` on Windows)
       starts the server and opens the app in a browser.
 - [ ] Loading the bundled example
-      `pipeline/data/example/samplesheet_epic_8.csv` shows **8 OK rows**
+      `pipeline/data/example/samplesheet_epic.csv` shows **4 OK rows**
       with green status and the "Samplesheet OK" badge lights up.
 - [ ] Loading an intentionally broken samplesheet (e.g. delete or rename
       one of the IDAT files, or drop a `Sentrix_ID`) shows the offending

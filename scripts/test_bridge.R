@@ -15,7 +15,7 @@ source(file.path("app", "R", "pipeline_bridge.R"))
 
 project_root <- normalizePath(".", winslash = "/")
 samplesheet <- file.path(
-  project_root, "pipeline", "data", "example", "samplesheet_epic_8.csv"
+  project_root, "pipeline", "data", "example", "samplesheet_epic.csv"
 )
 data_dir <- file.path(project_root, "pipeline", "data")
 

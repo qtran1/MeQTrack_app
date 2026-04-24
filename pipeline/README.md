@@ -10,13 +10,13 @@ A second, independent script, `cnv_heatmap.R`, is a standalone tool for producin
 
 ## Quick start with the bundled example data
 
-The `data/example/` folder ships with 8 EPIC (850k) samples from GEO series [GSE130295](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE130295) (melanoma). Each sample contributes a paired `_Red.idat` / `_Grn.idat`, named `GSM3735546…GSM3735553_201465940014_R0{1..8}C01`. The matching samplesheet, `samplesheet_epic_8.csv`, sits next to the IDATs and references them by relative path.
+The `data/example/` folder ships with 4 EPIC (850k) samples from GEO series [GSE130295](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE130295) (melanoma). Each sample contributes a paired `_Red.idat` / `_Grn.idat`, named `GSM3735546…GSM3735549_201465940014_R0{1..4}C01`. The matching samplesheet, `samplesheet_epic.csv`, sits next to the IDATs and references them by relative path.
 
-To run the full pipeline on these 8 samples, from anywhere on disk:
+To run the full pipeline on these 4 samples, from anywhere on disk:
 
 ```
 Rscript pipeline/methylation_pipeline.R \
-  --input      pipeline/data/example/samplesheet_epic_8.csv \
+  --input      pipeline/data/example/samplesheet_epic.csv \
   --output     pipeline/results_example \
   --data_dir   pipeline/data \
   --array_type EPIC \
@@ -24,7 +24,7 @@ Rscript pipeline/methylation_pipeline.R \
   --step       all
 ```
 
-This works regardless of where you invoke `Rscript` from because `methylation_pipeline.R` does `setwd(script_dir)` at startup, making the pipeline folder the effective working directory. The `Basename` values in `data/example/samplesheet_epic_8.csv` are therefore resolved as `data/example/GSM3735546_…R01C01` relative to that working directory.
+This works regardless of where you invoke `Rscript` from because `methylation_pipeline.R` does `setwd(script_dir)` at startup, making the pipeline folder the effective working directory. The `Basename` values in `data/example/samplesheet_epic.csv` are therefore resolved as `data/example/GSM3735546_…R01C01` relative to that working directory.
 
 After the run completes you should see:
 
@@ -43,7 +43,7 @@ To run a single step (e.g. re-generating only the CNV outputs from previously sa
 
 ```
 Rscript pipeline/methylation_pipeline.R \
-  --input      pipeline/data/example/samplesheet_epic_8.csv \
+  --input      pipeline/data/example/samplesheet_epic.csv \
   --output     pipeline/results_example \
   --data_dir   pipeline/data \
   --array_type EPIC \
@@ -60,7 +60,7 @@ The `--input` CSV requires three columns:
 | `Sample_Name` | Human-readable name used in plots and labels |
 | `Basename` | Path **stem** of the IDAT pair (no `_Red.idat` / `_Grn.idat` suffix), absolute or relative to the pipeline folder |
 
-Optional metadata columns (e.g. `Gender`, `Group`, `Batch`) are carried through to downstream plots and can be used for coloring — the bundled `samplesheet_epic_8.csv` includes `Gender` and a `path` column (the production HPC path) to show how additional metadata travels alongside the required three columns.
+Optional metadata columns (e.g. `Gender`, `Group`, `Batch`) are carried through to downstream plots and can be used for coloring — the bundled `samplesheet_epic.csv` includes `Gender` and a `path` column (the production HPC path) to show how additional metadata travels alongside the required three columns.
 
 `command_line.txt` contains the exact production `bsub` commands used at St. Jude if you need to submit to LSF instead of running locally.
 
@@ -140,7 +140,7 @@ pipeline/
     ├── keep.probes.EPIC.txt      (13.4 MB) curated EPIC  probe keep-list
     ├── keep.probes.EPICv2.txt    (12.3 MB) curated EPICv2 probe keep-list
     └── example/                  8-sample EPIC demo dataset (GSE130295)
-        ├── samplesheet_epic_8.csv  samplesheet with relative Basenames + Gender/path metadata
+        ├── samplesheet_epic.csv  samplesheet with relative Basenames + Gender/path metadata
         ├── GSM3735546_201465940014_R01C01_{Red,Grn}.idat
         ├── GSM3735547_201465940014_R02C01_{Red,Grn}.idat
         ├── GSM3735548_201465940014_R03C01_{Red,Grn}.idat
