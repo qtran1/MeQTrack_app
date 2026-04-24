@@ -247,6 +247,7 @@ Scoped at a theme level; tasks will be sharpened as Wave 5 completes. Each theme
 - Theme 6c. Documentation: a short in-app "Getting started" page and a two-page external quickstart.
 - Theme 6d. Tunable parameters (**confirmed needed at W4-GATE, 2026-04-23**): build a minimal Settings surface covering at least detection-p threshold, `n_variable_probes`, and t-SNE perplexity — plus any additional pipeline parameters identified during Wave 6 scoping. Defaults stay at the pipeline's current values; the Settings surface persists per-run (recorded in `run_manifest.json`) so re-runs are reproducible.
 - Theme 6e. Stage 2 packaging: wrap the Stage 1 launcher in a `Platypus` .app bundle (macOS) and/or an `electricShine` installer (Windows), only if Stage 1 is not adequate.
+- Theme 6f. Per-step execution + incremental results. Surface per-step Run buttons so users can trigger an individual pipeline stage (`--step preprocess|qc|filtering|dim_reduction|cnv|visualization`) instead of `--step all`. Pair with partial-bundle emission in `results_loader.R`: each result tab (QC / Dim-red / CNV / Report) populates the moment its own output file appears on disk, not only when the whole run is COMPLETED. Includes dependency guards (block "Run QC" when preprocess output is missing, etc.).
 
 ### Cross-cutting risks & watch items
 
