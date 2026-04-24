@@ -1,12 +1,44 @@
-# MeQTrack — Quickstart (Waves 1 & 2)
+# MeQTrack — Quickstart
 
-This is the hands-on walkthrough for the MVP so far: **Wave 1** gets the
-pipeline running end-to-end from a plain R session, and **Wave 2** adds the
-Shiny UI shell with a working Samplesheet tab (pick + validate + detect
-array type). QC / Dim-reduction / CNV / Report tabs are placeholders until
-later waves.
+End-user install path is **unzip + double-click**. Developer steps for
+running from a clone are further down.
 
-## Prerequisites
+## Install (from the release zip)
+
+You need **R ≥ 4.4** and **pandoc ≥ 2.x** on your machine before
+launching:
+
+- **R** — <https://cran.r-project.org/>
+- **pandoc** — `brew install pandoc` on macOS, or
+  <https://pandoc.org/installing.html> on Windows.
+
+Then:
+
+1. Download `MeQTrack_app-<version>.zip` and unzip it anywhere on disk
+   (Desktop, `~/Applications`, an external drive — wherever you'd like).
+2. **macOS:** double-click `meqtrack.command` inside the unzipped folder.
+   **Windows:** double-click `meqtrack.bat`.
+3. A Terminal / Command Prompt window opens. The **first launch** runs
+   `setup.R` to install all R packages — this takes 5–15 minutes depending
+   on network and CPU. Watch the window; the app starts automatically when
+   setup finishes.
+4. Subsequent launches are instant: the launcher detects the populated
+   library cache and skips straight to starting the Shiny server, then
+   opens the app in your default browser at `http://127.0.0.1:<port>`.
+5. Close the Terminal / Command window to stop the app. Uninstall = delete
+   the unzipped folder.
+
+If R or pandoc isn't installed, the launcher prints a clear message
+pointing at the install link instead of crashing.
+
+---
+
+## Developer setup (from a clone)
+
+Skip this if you used the release zip above — these steps reproduce the
+same environment manually. Useful for working on the code.
+
+### Prerequisites
 
 You need these installed on your Mac before running anything in this doc:
 
@@ -20,7 +52,7 @@ You need these installed on your Mac before running anything in this doc:
 All other packages (Bioconductor, `yamapData`, `conumee2`, etc.) install
 automatically in step 1 below.
 
-## Step 1 — Provision the project
+### Step 1 — Provision the project
 
 From `/Users/qtran/MeQTrack_app` run:
 
@@ -41,7 +73,7 @@ This will:
 Re-running `Rscript setup.R` is safe and cheap — installed packages are
 skipped.
 
-## Step 2 — Run the example pipeline end-to-end
+### Step 2 — Run the example pipeline end-to-end
 
 From the project root:
 
@@ -67,7 +99,7 @@ runs/example_<timestamp>/
 └── logs/
 ```
 
-## Step 3 — (Optional) Exercise the callr bridge
+### Step 3 — (Optional) Exercise the callr bridge
 
 `app/R/pipeline_bridge.R` is the thin wrapper the Shiny UI will use in
 Wave 3 to launch the pipeline in a background R process. You can prove it
@@ -99,7 +131,7 @@ If all four boxes are checked, Wave 1 is approved and we move to Wave 2
 failures, pipeline errors, missing report sections — flag it and we fix
 before moving on.
 
-## Step 4 — Launch the app (Wave 2)
+### Step 4 — Launch the app (dev mode)
 
 Wave 2 introduces the Shiny UI shell. The pipeline itself is not yet wired
 to the UI (that's Wave 3), so at this stage the app is a *pre-flight*

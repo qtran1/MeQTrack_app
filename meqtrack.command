@@ -52,7 +52,30 @@ if ! command -v pandoc >/dev/null 2>&1; then
 EOS
 fi
 
-# 3. Start Shiny. runApp reads app/app.R; renv activates automatically via
+# 3. First-launch provisioning. The distribution zip ships renv.lock and
+#    renv/activate.R but NOT the renv/library/ cache (machine-specific
+#    and would balloon the zip). On first launch we need to populate the
+#    library — setup.R handles renv::restore + Bioconductor + yamapData
+#    and is safe to re-run (no-op when already provisioned).
+if [ ! -d "renv/library" ] || [ -z "$(ls -A renv/library 2>/dev/null)" ]; then
+  echo
+  echo "  First-time setup: installing R packages."
+  echo "  This takes 5-15 minutes on first run; subsequent launches are instant."
+  echo "  Watch this window for progress; the app starts automatically when done."
+  echo
+  if ! Rscript setup.R; then
+    echo
+    echo "  ERROR: setup.R failed. See the messages above."
+    echo "  Press Return to close this window."
+    read -r _
+    exit 1
+  fi
+  echo
+  echo "  Setup complete. Starting the app..."
+  echo
+fi
+
+# 4. Start Shiny. runApp reads app/app.R; renv activates automatically via
 #    the project's .Rprofile so the installed library is used.
 echo "Starting Shiny server on http://127.0.0.1 ..."
 echo "(Close this Terminal window to stop the app.)"
