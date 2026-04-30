@@ -38,6 +38,7 @@ source(file.path("R", "pipeline_bridge.R"),    local = FALSE)
 source(file.path("R", "run_controller.R"),     local = FALSE)
 source(file.path("R", "results_loader.R"),     local = FALSE)
 source(file.path("R", "past_runs_module.R"),   local = FALSE)
+source(file.path("R", "settings_module.R"),    local = FALSE)
 source(file.path("R", "qc_module.R"),          local = FALSE)
 source(file.path("R", "dimred_module.R"),      local = FALSE)
 source(file.path("R", "cnv_module.R"),         local = FALSE)
@@ -61,6 +62,7 @@ addResourcePath("runs", file.path(WORKSPACE_PATH, "runs"))
 ss_ui        <- samplesheet_ui("samplesheet")
 run_ui       <- run_controller_ui("run")
 past_runs_ui <- past_runs_module_ui("past_runs")
+settings_ui  <- settings_module_ui("settings")
 qc_ui        <- qc_module_ui("qc")
 dimred_ui    <- dimred_module_ui("dimred")
 cnv_ui       <- cnv_module_ui("cnv")
@@ -112,6 +114,10 @@ ui <- bslib::page_navbar(
   bslib::nav_panel(
     title = "Run",
     icon = icon("play"),
+    bslib::card(
+      bslib::card_header("Settings"),
+      bslib::card_body(settings_ui, fillable = FALSE)
+    ),
     bslib::card(
       bslib::card_header("Pipeline run"),
       bslib::card_body(run_ui$main, fillable = FALSE)
@@ -184,12 +190,20 @@ server <- function(input, output, session) {
     workspace = function() WORKSPACE_PATH
   )
 
+  # Settings — five tunable QC + dim. reduction parameters. Repopulates
+  # from a past run's manifest when the user attaches one.
+  parameters <- settings_module_server(
+    "settings",
+    attach_run = past_run_selected
+  )
+
   run_state <- run_controller_server(
     "run",
     ss_state      = ss_state,
     workspace     = function() WORKSPACE_PATH,
     project_root_ = project_root,
-    attach_run    = past_run_selected
+    attach_run    = past_run_selected,
+    parameters    = parameters
   )
 
   # When the user attaches a past run, jump to the QC tab so the result is

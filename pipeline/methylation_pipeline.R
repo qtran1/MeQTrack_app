@@ -110,9 +110,10 @@ cat("Setting up methylation array analysis pipeline...\n")
 set.seed(123456)
 options(stringsAsFactors = FALSE)
 
-# Load configuration
+# Load configuration. The user-supplied config (if any) only needs to
+# carry the keys it overrides — everything else inherits from default_config().
 if (!is.null(opt$config)) {
-  config <- load_config(opt$config)
+  config <- deep_merge(default_config(), load_config(opt$config))
 } else {
   config <- default_config()
 }

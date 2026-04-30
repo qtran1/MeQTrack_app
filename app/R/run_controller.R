@@ -126,7 +126,8 @@ run_controller_ui <- function(id) {
 # Server
 # ---------------------------------------------------------------------------
 run_controller_server <- function(id, ss_state, workspace, project_root_,
-                                  attach_run = shiny::reactive(NULL)) {
+                                  attach_run = shiny::reactive(NULL),
+                                  parameters = shiny::reactive(list())) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -262,7 +263,8 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
           array_type      = st$array_type %||% "auto",
           threads         = 4L,
           step            = step_key,
-          pipeline_script = file.path(pr, "pipeline", "methylation_pipeline.R")
+          pipeline_script = file.path(pr, "pipeline", "methylation_pipeline.R"),
+          parameters      = if (is.function(parameters)) parameters() else parameters
         ),
         error = function(e) {
           shiny::showNotification(

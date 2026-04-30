@@ -1,5 +1,25 @@
 # Configuration module for methylation array analysis pipeline
 
+#' Recursively merge override values into a default config tree.
+#'
+#' Used by the driver so a user-supplied config file only needs to specify
+#' the keys it wants to change — every other key falls back to default_config().
+#' Lists are merged recursively (so e.g. config$dim_reduction$tsne$perplexity
+#' can be overridden without losing the rest of dim_reduction); leaves are
+#' replaced wholesale.
+deep_merge <- function(default, override) {
+  if (is.null(override)) return(default)
+  for (key in names(override)) {
+    if (is.list(default[[key]]) && is.list(override[[key]]) &&
+        !is.null(names(override[[key]]))) {
+      default[[key]] <- deep_merge(default[[key]], override[[key]])
+    } else {
+      default[[key]] <- override[[key]]
+    }
+  }
+  default
+}
+
 #' Load configuration from file
 #'
 #' @param config_file Path to configuration file
