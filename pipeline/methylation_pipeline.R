@@ -312,8 +312,14 @@ run_pipeline <- function(step) {
     }
   }
   
-  if (step == "all" || step == "filtering") {
-    log_message("Step 3: Probe filtering", log_file)
+  # The UI presents QC and probe filtering as a single "QC and probe filtering"
+  # stage, so --step qc must also run the filtering step. --step filtering on
+  # its own is preserved for CLI back-compat.
+  if (step == "all" || step == "qc" || step == "filtering") {
+    # Note: deliberately no "Step N:" prefix — probe filtering is a sub-step
+    # of the QC stage in the UI and the run_controller's stage-progress parser
+    # ignores log lines without that prefix.
+    log_message("Probe filtering", log_file)
     
     # Ensure beta_values is loaded and not NULL
     if (is.null(beta_values) || all(is.na(beta_values))) {
@@ -430,7 +436,7 @@ run_pipeline <- function(step) {
   }
   
   if (step == "all" || step == "dim_reduction") {
-    log_message("Step 4: Dimensionality reduction analysis", log_file)
+    log_message("Step 3: Dimensionality reduction analysis", log_file)
     
     # Ensure sample_info is available for dimensionality reduction
     if (is.null(sample_info)) {
@@ -546,7 +552,7 @@ run_pipeline <- function(step) {
   }
   
   if (step == "all" || step == "cnv") {
-    log_message("Step 5: Copy number variation analysis", log_file)
+    log_message("Step 4: Copy number variation analysis", log_file)
     
     # Ensure array_type is available for CNV analysis
     if (is.null(array_type)) {
@@ -617,7 +623,7 @@ run_pipeline <- function(step) {
   }
   
   if (step == "all" || step == "visualization") {
-    log_message("Step 6: Generate visualizations", log_file)
+    log_message("Step 5: Generate visualizations", log_file)
 
     # Load required results if they exist
     if (file.exists(file.path(dirs$qc, "qc_results.RData"))) {

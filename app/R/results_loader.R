@@ -38,35 +38,51 @@ METADATA_EXCLUDED_COLS <- c(
   "Basename", "Array", "Slide", "Pool_ID"
 )
 
-#' Load the full bundle from a run directory. Returns NULL on any failure
-#' so callers don't have to juggle half-loaded state.
+#' Load all artifacts present under a run directory and return them as a
+#' bundle. Pieces that haven't been produced yet are returned as NULL so
+#' downstream modules can render placeholders for the missing slots —
+#' this is what enables Theme 6f's incremental result tabs.
+#'
+#' Returns NULL only when the run directory itself is missing or empty;
+#' a bundle with every piece NULL is still preferable to a NULL bundle
+#' because it lets modules surface "still running, nothing yet" placeholders
+#' instead of "no completed run."
 load_results_bundle <- function(run_dir, run_url_base = NULL) {
   if (is.null(run_dir) || !dir.exists(run_dir)) return(NULL)
 
   qc_report_path <- file.path(run_dir, RESULTS_PATHS$qc_report)
-  if (!file.exists(qc_report_path)) return(NULL)
+  qc_report <- if (file.exists(qc_report_path)) {
+    tryCatch(
+      utils::read.csv(qc_report_path, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
+  } else NULL
 
-  qc_report <- tryCatch(
-    utils::read.csv(qc_report_path, stringsAsFactors = FALSE),
-    error = function(e) NULL
-  )
-  if (is.null(qc_report)) return(NULL)
-
-  qc_fail_ids <- if ("Pass_QC" %in% colnames(qc_report)) {
+  qc_fail_ids <- if (!is.null(qc_report) && "Pass_QC" %in% colnames(qc_report)) {
     as.character(qc_report$Sample_ID[!as.logical(qc_report$Pass_QC)])
   } else character(0)
 
-  sample_info <- tryCatch(
-    utils::read.table(file.path(run_dir, RESULTS_PATHS$sample_info),
-                      header = TRUE, sep = "\t", stringsAsFactors = FALSE,
-                      check.names = FALSE),
-    error = function(e) NULL
-  )
+  sample_info_path <- file.path(run_dir, RESULTS_PATHS$sample_info)
+  sample_info <- if (file.exists(sample_info_path)) {
+    tryCatch(
+      utils::read.table(sample_info_path,
+                        header = TRUE, sep = "\t", stringsAsFactors = FALSE,
+                        check.names = FALSE),
+      error = function(e) NULL
+    )
+  } else NULL
 
   tsne   <- .load_rdata(file.path(run_dir, RESULTS_PATHS$tsne_rdata),   "tsne_results")
   umap   <- .load_rdata(file.path(run_dir, RESULTS_PATHS$umap_rdata),   "umap_results")
   hclust <- .load_rdata(file.path(run_dir, RESULTS_PATHS$hclust_rdata), "hclust_results")
   cnv    <- .load_rdata(file.path(run_dir, RESULTS_PATHS$cnv_rdata),    "cnv_results")
+
+  # If literally nothing is on disk yet (very early in a run), don't return
+  # a hollow bundle — let consumers keep showing the "no run yet" empty state.
+  if (is.null(qc_report) && is.null(sample_info) &&
+      is.null(tsne) && is.null(umap) && is.null(hclust) && is.null(cnv)) {
+    return(NULL)
+  }
 
   metadata_cols <- detect_metadata_cols(sample_info)
 
@@ -85,7 +101,9 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
 }
 
 #' Shiny module that watches the run controller's state reactive and emits
-#' a results bundle when a completed run is available.
+#' a results bundle whenever artifacts are available. Polls every 2s while
+#' a run is in progress so the QC/Dim-reduction/CNV tabs populate as each
+#' pipeline stage finishes (Theme 6f), instead of only at end-of-run.
 #'
 #' @param id           module id
 #' @param run_state    reactive — output of run_controller_server()
@@ -95,8 +113,17 @@ results_loader_server <- function(id, run_state, runs_url_prefix = "runs") {
   shiny::moduleServer(id, function(input, output, session) {
     shiny::reactive({
       rs <- run_state()
-      if (is.null(rs) || !identical(rs$state, RUN_STATE_COMPLETED)) return(NULL)
-      if (is.null(rs$run_dir)) return(NULL)
+      if (is.null(rs) || is.null(rs$run_dir)) return(NULL)
+      # Show partial results during RUNNING and final results after
+      # COMPLETED. For other states (idle / failed / cancelled) only emit
+      # if there's still a run_dir we can read from — failed-mid-run still
+      # has whatever earlier stages produced.
+      if (identical(rs$state, RUN_STATE_IDLE)) return(NULL)
+      if (identical(rs$state, RUN_STATE_RUNNING)) {
+        # Re-trigger this reactive every 2 seconds so newly-produced
+        # artifacts are picked up while the pipeline is still running.
+        shiny::invalidateLater(2000, session)
+      }
       url_base <- paste0(runs_url_prefix, "/", basename(rs$run_dir))
       load_results_bundle(rs$run_dir, run_url_base = url_base)
     })

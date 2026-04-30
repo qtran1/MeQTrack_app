@@ -74,6 +74,14 @@ bridge_launch <- function(samplesheet,
   dir.create(logs_dir, recursive = TRUE, showWarnings = FALSE)
   log_file <- file.path(logs_dir, "pipeline.log")
 
+  # Truncate the log file synchronously before returning. system2 in the
+  # worker eventually truncates via shell redirect (>), but there is a gap
+  # between bridge_launch returning and the worker actually getting there;
+  # during that gap a UI poll reading the file would see stale "Step N:"
+  # lines from a prior per-step run targeting this same run_dir, which
+  # would mislead the stage-progress parser into transitioning backwards.
+  cat("", file = log_file)
+
   # Write a tiny run manifest so the UI can reason about the run later.
   run_id <- basename(output_dir)
   manifest <- list(

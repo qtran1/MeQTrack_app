@@ -39,6 +39,11 @@ qc_module_server <- function(id, results) {
                           "No completed run yet. Run the pipeline first ",
                           "(Run tab), then this view populates automatically."))
       }
+      if (is.null(r$qc_report)) {
+        return(shiny::div(class = "alert alert-secondary",
+                          "QC results not available yet — waiting for the ",
+                          "QC step to finish."))
+      }
       n_total <- nrow(r$qc_report)
       n_fail  <- length(r$qc_fail_ids)
       cls <- if (n_fail == 0) "alert alert-success" else "alert alert-warning"
@@ -54,7 +59,7 @@ qc_module_server <- function(id, results) {
 
     output$qc_table <- DT::renderDT({
       r <- results()
-      if (is.null(r)) return(NULL)
+      if (is.null(r) || is.null(r$qc_report)) return(NULL)
       df <- r$qc_report
       # Pass_QC can read as logical, character, or integer depending on the
       # upstream CSV. Normalize to character "TRUE"/"FALSE" so DT's JS-side

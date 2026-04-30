@@ -111,9 +111,19 @@ cnv_module_server <- function(id, results) {
         return(shiny::div(class = "alert alert-warning",
                           "Frequency plot not found."))
       }
+      # The pipeline generates this PDF at 12in x 5in; the previous fixed
+      # 75vh height left the figure as a thin band inside a tall iframe.
+      # Match the PDF's natural aspect ratio and use #view=FitH so the PDF
+      # viewer fits horizontally to the iframe width.
       shiny::tags$iframe(
-        src = paste0(r$run_url_base, "/", rel),
-        style = "width: 100%; height: 75vh; border: 1px solid #dee2e6; border-radius: 4px;"
+        src = paste0(r$run_url_base, "/", rel, "#view=FitH"),
+        style = paste(
+          "width: 100%;",
+          "aspect-ratio: 12 / 5;",
+          "min-height: 320px;",
+          "border: 1px solid #dee2e6;",
+          "border-radius: 4px;"
+        )
       )
     })
 
