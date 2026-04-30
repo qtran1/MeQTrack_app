@@ -37,6 +37,7 @@ source(file.path("R", "samplesheet_module.R"), local = FALSE)
 source(file.path("R", "pipeline_bridge.R"),    local = FALSE)
 source(file.path("R", "run_controller.R"),     local = FALSE)
 source(file.path("R", "results_loader.R"),     local = FALSE)
+source(file.path("R", "past_runs_module.R"),   local = FALSE)
 source(file.path("R", "qc_module.R"),          local = FALSE)
 source(file.path("R", "dimred_module.R"),      local = FALSE)
 source(file.path("R", "cnv_module.R"),         local = FALSE)
@@ -57,14 +58,16 @@ addResourcePath("runs", file.path(WORKSPACE_PATH, "runs"))
 # ---------------------------------------------------------------------------
 # Build module UI pieces once so we can drop slots into multiple layout
 # positions (sidebar vs main vs metadata card).
-ss_ui     <- samplesheet_ui("samplesheet")
-run_ui    <- run_controller_ui("run")
-qc_ui     <- qc_module_ui("qc")
-dimred_ui <- dimred_module_ui("dimred")
-cnv_ui    <- cnv_module_ui("cnv")
-report_ui <- report_module_ui("report")
+ss_ui        <- samplesheet_ui("samplesheet")
+run_ui       <- run_controller_ui("run")
+past_runs_ui <- past_runs_module_ui("past_runs")
+qc_ui        <- qc_module_ui("qc")
+dimred_ui    <- dimred_module_ui("dimred")
+cnv_ui       <- cnv_module_ui("cnv")
+report_ui    <- report_module_ui("report")
 
 ui <- bslib::page_navbar(
+  id = "main_nav",
   title = tags$span(
     tags$strong("MeQTrack"),
     tags$span(" — methylation analysis",
@@ -115,7 +118,18 @@ ui <- bslib::page_navbar(
     )
   ),
   # -----------------------------------------------------------------
-  # Placeholder tabs for later waves
+  # Past runs library (Wave 6 Theme 6b)
+  # -----------------------------------------------------------------
+  bslib::nav_panel(
+    title = "Past runs",
+    icon = icon("clock-rotate-left"),
+    bslib::card(
+      bslib::card_header("Past runs"),
+      bslib::card_body(past_runs_ui, fillable = FALSE)
+    )
+  ),
+  # -----------------------------------------------------------------
+  # Result tabs
   # -----------------------------------------------------------------
   bslib::nav_panel(
     title = "QC", icon = icon("chart-column"),
@@ -164,12 +178,28 @@ server <- function(input, output, session) {
     project_root_ = project_root
   )
 
+  # Past runs library — emits a run_dir path when the user clicks "Open".
+  past_run_selected <- past_runs_module_server(
+    "past_runs",
+    workspace = function() WORKSPACE_PATH
+  )
+
   run_state <- run_controller_server(
     "run",
     ss_state      = ss_state,
     workspace     = function() WORKSPACE_PATH,
-    project_root_ = project_root
+    project_root_ = project_root,
+    attach_run    = past_run_selected
   )
+
+  # When the user attaches a past run, jump to the QC tab so the result is
+  # immediately visible. This is the most informative landing — they can
+  # navigate from there to Dim. reduction / CNV / Report as needed.
+  observeEvent(past_run_selected(), {
+    if (!is.null(past_run_selected())) {
+      bslib::nav_select(id = "main_nav", selected = "QC", session = session)
+    }
+  }, ignoreInit = TRUE)
 
   # Wave 4: result views. results_loader emits a bundle when run_state flips
   # to COMPLETED; modules render from that bundle and reset when it goes NULL.

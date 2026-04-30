@@ -125,7 +125,8 @@ run_controller_ui <- function(id) {
 # ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
-run_controller_server <- function(id, ss_state, workspace, project_root_) {
+run_controller_server <- function(id, ss_state, workspace, project_root_,
+                                  attach_run = shiny::reactive(NULL)) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -327,6 +328,49 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
       }
       message(sprintf("[run_controller] cancelled run dir=%s step=%s",
                       rv$run_dir, rv$step))
+    }, ignoreInit = TRUE)
+
+    # --- Attach a past run (Theme 6b) ------------------------------------
+    # When the past-runs module emits a path, adopt it as our current
+    # run_dir. Stage state is synthesized from artifacts on disk: a stage
+    # is "done" if its expected output file exists, "pending" otherwise.
+    # We don't have historical durations, so stage_times/stage_ends stay
+    # NULL and the elapsed-time column shows "—".
+    shiny::observeEvent(attach_run(), {
+      path <- attach_run()
+      if (is.null(path)) return()
+      if (identical(rv$state, RUN_STATE_RUNNING)) {
+        shiny::showNotification(
+          paste("Cannot attach a past run while a pipeline is in progress.",
+                "Cancel the current run first."),
+          type = "warning", duration = 8
+        )
+        return()
+      }
+      if (!dir.exists(path)) {
+        shiny::showNotification(
+          sprintf("Run directory not found: %s", path),
+          type = "warning"
+        )
+        return()
+      }
+      rv$run_dir     <- path
+      rv$stage_state <- synthesize_stage_state_from_disk(path)
+      rv$stage_times <- stats::setNames(vector("list", length(RUN_STAGES)),
+                                        names(RUN_STAGES))
+      rv$stage_ends  <- stats::setNames(vector("list", length(RUN_STAGES)),
+                                        names(RUN_STAGES))
+      rv$stage       <- NA_character_
+      rv$state       <- RUN_STATE_COMPLETED
+      rv$step        <- RUN_STEP_ALL
+      rv$exit_code   <- 0L
+      rv$error_msg   <- NULL
+      rv$report_path <- discover_report(path)
+      rv$started_at  <- NULL
+      rv$ended_at    <- NULL
+      rv$handle      <- NULL
+      rv$log_file    <- file.path(path, "logs", "pipeline.log")
+      message(sprintf("[run_controller] attached past run dir=%s", path))
     }, ignoreInit = TRUE)
 
     # --- Poll loop: refreshes every second while a run is active ---------
@@ -596,6 +640,32 @@ render_stages <- function(stage_state, stage_times, stage_ends, current,
     )
   })
   shiny::tagList(rows)
+}
+
+# Synthesize a stage_state vector from artifacts present in a run_dir.
+# Used when attaching a past run (Theme 6b) — the original in-memory
+# durations are gone, but presence of each stage's output file is enough
+# to drive the badges and the per-step prereq checks.
+synthesize_stage_state_from_disk <- function(run_dir) {
+  ss <- stats::setNames(rep("pending", length(RUN_STAGES)),
+                        names(RUN_STAGES))
+  if (is.null(run_dir) || !dir.exists(run_dir)) return(ss)
+  has <- list(
+    preprocess    = file.exists(file.path(run_dir, "processed_data",
+                                          "preprocessed_data.RData")),
+    qc            = file.exists(file.path(run_dir, "qc",
+                                          "qc_results.RData")),
+    dim_reduction = file.exists(file.path(run_dir, "dimensionality_reduction",
+                                          "dim_reduction_results.RData")),
+    cnv           = file.exists(file.path(run_dir, "cnv",
+                                          "cnv_results.RData")),
+    visualization = length(list.files(file.path(run_dir, "reports"),
+                                       pattern = "\\.html$")) > 0L
+  )
+  for (k in names(ss)) {
+    if (isTRUE(has[[k]])) ss[[k]] <- "done"
+  }
+  ss
 }
 
 # Check whether a per-step run can launch against the given run_dir. Returns
