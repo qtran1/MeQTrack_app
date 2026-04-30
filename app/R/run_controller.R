@@ -23,19 +23,32 @@
 #     -> reactive list(state, stage, run_dir, exit_code)   (for header badge)
 # ---------------------------------------------------------------------------
 
-# Stage keys (machine) and labels (display). Order matters: index = step #.
+# User-facing pipeline stages. Probe filtering is folded into "qc" so users
+# see one combined step instead of QC and filtering as separate rows; the
+# pipeline still runs them as Step 2 + Step 3 internally, but they map onto
+# the same UI row (see PIPELINE_STEP_TO_STAGE below).
 RUN_STAGES <- c(
   preprocess    = "Preprocessing",
-  qc            = "Quality control",
-  filtering     = "Probe filtering",
+  qc            = "QC and probe filtering",
   dim_reduction = "Dimensionality reduction",
   cnv           = "Copy-number variation",
   visualization = "Report generation"
 )
 
+# The pipeline emits "Step N:" log lines for the five user-facing steps.
+# Probe filtering is a sub-step of QC and its log line deliberately omits
+# the "Step N:" prefix so this regex does not match it.
+PIPELINE_STEP_TO_STAGE <- c(
+  "preprocess",     # Step 1
+  "qc",             # Step 2 — quality control + probe filtering
+  "dim_reduction",  # Step 3
+  "cnv",            # Step 4
+  "visualization"   # Step 5
+)
+
 # Regex that matches the pipeline's stage-start log line. The pipeline emits
-# lines like: "[2026-04-22 14:03:11] Step 3: Probe filtering".
-STAGE_LINE_RE <- "Step\\s+([1-6]):"
+# lines like: "[2026-04-22 14:03:11] Step 3: Dimensionality reduction analysis".
+STAGE_LINE_RE <- "Step\\s+([1-5]):"
 
 # Overall run states.
 RUN_STATE_IDLE      <- "idle"
@@ -43,6 +56,24 @@ RUN_STATE_RUNNING   <- "running"
 RUN_STATE_COMPLETED <- "completed"
 RUN_STATE_FAILED    <- "failed"
 RUN_STATE_CANCELLED <- "cancelled"
+
+# Sentinel for the full-pipeline run.
+RUN_STEP_ALL <- "all"
+
+# Upstream artifact requirements for each per-step run. Each element is a
+# list of "requirement groups" (paths relative to run_dir). A group is
+# satisfied if ANY of its files exists; the step is runnable if ALL groups
+# are satisfied. Preprocess has no upstream prereqs.
+STEP_PREREQS <- list(
+  preprocess    = list(),
+  qc            = list("processed_data/preprocessed_data.RData"),
+  dim_reduction = list(c("processed_data/preprocessed_data.RData",
+                         "processed_data/filtered_beta_values.txt")),
+  cnv           = list("processed_data/preprocessed_data.RData"),
+  visualization = list(c("qc/qc_results.RData",
+                         "dimensionality_reduction/dim_reduction_results.RData",
+                         "cnv/cnv_results.RData"))
+)
 
 # ---------------------------------------------------------------------------
 # UI
@@ -105,6 +136,7 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
       handle      = NULL,                  # pipeline_bridge handle, or NULL
       run_dir     = NULL,                  # absolute path
       log_file    = NULL,
+      step        = RUN_STEP_ALL,          # requested step on the active/last run
       stage       = NA_character_,         # currently running stage key
       stage_times = NULL,                  # named list: <stage> -> start POSIXct
       stage_ends  = NULL,                  # named list: <stage> -> end POSIXct (NULL while running)
@@ -134,31 +166,88 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
 
     reset_stages()
 
-    # --- Run button ------------------------------------------------------
-    shiny::observeEvent(input$run, {
+    # --- Launch helper: shared by Run-all and per-step buttons -----------
+    launch_step <- function(step_key) {
+      message(sprintf("[run_controller] click step=%s", step_key))
       st <- ss_state()
       if (!isTRUE(st$valid)) {
         shiny::showNotification(
           "Samplesheet is not ready. Fix validation issues first.",
           type = "warning"
         )
-        return()
+        return(invisible())
       }
       if (identical(rv$state, RUN_STATE_RUNNING)) {
         shiny::showNotification("A run is already in progress.", type = "message")
-        return()
+        return(invisible())
       }
 
       ws <- if (is.function(workspace)) workspace() else workspace
       pr <- if (is.function(project_root_)) project_root_() else project_root_
 
-      stem <- tools::file_path_sans_ext(basename(st$samplesheet_path))
-      run_id <- sprintf("%s_%s", format(Sys.time(), "%Y%m%d-%H%M%S"), stem)
-      run_dir <- file.path(ws, "runs", run_id)
+      # Per-step (non-"all") runs reuse the current run_dir so they can pick
+      # up upstream artifacts. Run-all always creates a fresh run_dir.
+      reuse_dir <- !identical(step_key, RUN_STEP_ALL) &&
+                   !is.null(rv$run_dir) &&
+                   dir.exists(rv$run_dir)
 
-      reset_stages()
-      rv$run_dir     <- run_dir
-      rv$started_at  <- Sys.time()
+      # Non-preprocess per-step runs need an existing run_dir AND its
+      # upstream artifacts. Block the launch and tell the user why.
+      if (!identical(step_key, RUN_STEP_ALL) &&
+          !identical(step_key, "preprocess") &&
+          !reuse_dir) {
+        shiny::showNotification(
+          sprintf("Cannot run %s alone — start with a full run (or just preprocess) first.",
+                  RUN_STAGES[[step_key]]),
+          type = "warning", duration = 8
+        )
+        return(invisible())
+      }
+      if (reuse_dir) {
+        pr_check <- check_step_prereqs(step_key, rv$run_dir)
+        if (!isTRUE(pr_check$ok)) {
+          shiny::showNotification(
+            sprintf("Cannot run %s — missing upstream artifact(s): %s",
+                    RUN_STAGES[[step_key]],
+                    paste(basename(unlist(pr_check$missing)), collapse = ", ")),
+            type = "warning", duration = 8
+          )
+          return(invisible())
+        }
+      }
+
+      if (!reuse_dir) {
+        stem <- tools::file_path_sans_ext(basename(st$samplesheet_path))
+        run_id <- sprintf("%s_%s", format(Sys.time(), "%Y%m%d-%H%M%S"), stem)
+        run_dir <- file.path(ws, "runs", run_id)
+        reset_stages()
+        rv$run_dir <- run_dir
+      } else {
+        # Reuse: clear prior state for the target stage only; preserve the
+        # done/failed/pending state of every other stage from prior runs.
+        rv$stage_state[[step_key]] <- "pending"
+        rv$stage_ends[[step_key]]  <- NULL
+        rv$stage_times[[step_key]] <- NULL
+      }
+
+      # Seed the first stage as "running" right now so its clock starts
+      # ticking at click time. The pipeline takes a few seconds to bootstrap
+      # before emitting its first "Step N:" log line; without this seed,
+      # the user would see no clock movement on the row they clicked, while
+      # any prior row with stale stage_times appears to tick instead.
+      first_stage <- if (identical(step_key, RUN_STEP_ALL)) {
+        "preprocess"
+      } else {
+        step_key
+      }
+      now <- Sys.time()
+      rv$stage <- first_stage
+      rv$stage_state[[first_stage]] <- "running"
+      rv$stage_times[[first_stage]] <- now
+      rv$stage_ends[[first_stage]]  <- NULL
+
+      rv$step        <- step_key
+      rv$started_at  <- now
       rv$ended_at    <- NULL
       rv$exit_code   <- NA_integer_
       rv$error_msg   <- NULL
@@ -167,11 +256,11 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
       handle <- tryCatch(
         bridge_launch(
           samplesheet     = st$samplesheet_path,
-          output_dir      = run_dir,
+          output_dir      = rv$run_dir,
           data_dir        = file.path(pr, "pipeline", "data"),
           array_type      = st$array_type %||% "auto",
           threads         = 4L,
-          step            = "all",
+          step            = step_key,
           pipeline_script = file.path(pr, "pipeline", "methylation_pipeline.R")
         ),
         error = function(e) {
@@ -182,15 +271,37 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
           NULL
         }
       )
-      if (is.null(handle)) return()
+      if (is.null(handle)) return(invisible())
 
       rv$handle   <- handle
       rv$log_file <- handle$log_file
       rv$state    <- RUN_STATE_RUNNING
 
-      message(sprintf("[run_controller] launched run_id=%s dir=%s",
-                      handle$run_id, run_dir))
-    }, ignoreInit = TRUE)
+      message(sprintf("[run_controller] launched run_id=%s step=%s dir=%s",
+                      handle$run_id, step_key, rv$run_dir))
+      invisible()
+    }
+
+    # --- Run button (full pipeline) --------------------------------------
+    shiny::observeEvent(input$run, launch_step(RUN_STEP_ALL),
+                        ignoreInit = TRUE)
+
+    # --- Per-step Run buttons --------------------------------------------
+    # Observers spelled out one-per-stage. An earlier version registered
+    # these via `for (.k in names(RUN_STAGES)) local({...})` which is the
+    # textbook Shiny closure-in-loop pattern, but in practice the wrong
+    # handler was firing — clicking Step N would launch step N-1 — so we
+    # take the safe, explicit route here.
+    shiny::observeEvent(input$run_preprocess,
+                        launch_step("preprocess"),    ignoreInit = TRUE)
+    shiny::observeEvent(input$run_qc,
+                        launch_step("qc"),            ignoreInit = TRUE)
+    shiny::observeEvent(input$run_dim_reduction,
+                        launch_step("dim_reduction"), ignoreInit = TRUE)
+    shiny::observeEvent(input$run_cnv,
+                        launch_step("cnv"),           ignoreInit = TRUE)
+    shiny::observeEvent(input$run_visualization,
+                        launch_step("visualization"), ignoreInit = TRUE)
 
     # --- Cancel button ---------------------------------------------------
     shiny::observeEvent(input$cancel, {
@@ -208,8 +319,14 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
         rv$stage_ends[[rv$stage]]  <- rv$ended_at
       }
 
-      quarantine_partial_outputs(rv$run_dir)
-      message(sprintf("[run_controller] cancelled run dir=%s", rv$run_dir))
+      # Only quarantine on a full-run cancel. For per-step cancels, the prior
+      # stage outputs in this dir are still valid; only the current step's
+      # half-finished files are suspect, and the user can re-run that step.
+      if (identical(rv$step, RUN_STEP_ALL)) {
+        quarantine_partial_outputs(rv$run_dir)
+      }
+      message(sprintf("[run_controller] cancelled run dir=%s step=%s",
+                      rv$run_dir, rv$step))
     }, ignoreInit = TRUE)
 
     # --- Poll loop: refreshes every second while a run is active ---------
@@ -232,12 +349,23 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
 
         if (isTRUE(rv$exit_code == 0L)) {
           rv$state <- RUN_STATE_COMPLETED
-          # Close out the last running stage first, then mark all done.
+          # Close out the last running stage first, then mark final state.
           if (!is.na(rv$stage) && !is.null(rv$stage_state)) {
             rv$stage_state[[rv$stage]] <- "done"
             rv$stage_ends[[rv$stage]]  <- rv$ended_at
           }
-          rv$stage_state[] <- "done"
+          if (identical(rv$step, RUN_STEP_ALL)) {
+            # Full run: every stage executed.
+            rv$stage_state[] <- "done"
+          } else if (!is.null(rv$stage_state)) {
+            # Per-step run: ensure the requested step is marked done even
+            # if we missed its "Step N:" log line. Other stages keep their
+            # prior state (done from earlier runs, or pending).
+            rv$stage_state[[rv$step]] <- "done"
+            if (is.null(rv$stage_ends[[rv$step]])) {
+              rv$stage_ends[[rv$step]] <- rv$ended_at
+            }
+          }
           rv$stage <- NA_character_
           rv$report_path <- discover_report(rv$run_dir)
         } else {
@@ -280,7 +408,8 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
         shiny::invalidateLater(1000, session)
       }
       render_stages(rv$stage_state, rv$stage_times, rv$stage_ends,
-                    current = rv$stage, run_state = rv$state)
+                    current = rv$stage, run_state = rv$state,
+                    run_dir = rv$run_dir, ns = ns)
     })
 
     output$log_tail <- shiny::renderText({
@@ -348,7 +477,10 @@ run_controller_server <- function(id, ss_state, workspace, project_root_) {
 # ---------------------------------------------------------------------------
 
 # Parse the log tail and advance rv$stage / rv$stage_state / rv$stage_times.
-# We only look for "Step N:" markers emitted by methylation_pipeline.R.
+# We only look for "Step N:" markers emitted by methylation_pipeline.R, and
+# remap N onto a user-facing stage key via PIPELINE_STEP_TO_STAGE (so the
+# pipeline's six internal steps collapse to five UI rows — Step 2 (QC) and
+# Step 3 (filtering) both belong to the same "qc" stage).
 update_stage_progress <- function(rv, lines) {
   if (!length(lines)) return(invisible())
   matches <- regmatches(lines, regexec(STAGE_LINE_RE, lines))
@@ -359,10 +491,24 @@ update_stage_progress <- function(rv, lines) {
   if (!length(step_nums)) return(invisible())
 
   latest <- max(step_nums)
-  if (latest < 1L || latest > length(RUN_STAGES)) return(invisible())
+  if (latest < 1L || latest > length(PIPELINE_STEP_TO_STAGE)) return(invisible())
 
-  new_stage_key <- names(RUN_STAGES)[latest]
+  new_stage_key <- PIPELINE_STEP_TO_STAGE[latest]
+  # Already on this stage — could be a) we seeded it at click time, or
+  # b) we already transitioned to it on a previous poll. Either way, keep
+  # the existing start time so the visible clock isn't reset.
   if (identical(rv$stage, new_stage_key)) return(invisible())
+
+  # Guard against backward transitions. launch_step seeds rv$stage at click
+  # time; if a poll then catches a stale log line that maps to an earlier UI
+  # stage (e.g. a leftover "Step 2:" from a prior per-step QC run before the
+  # bridge truncates the log), don't regress — that would reset the clicked
+  # stage's clock and re-seed an already-completed stage as running.
+  new_idx <- match(new_stage_key, names(RUN_STAGES))
+  cur_idx <- if (is.na(rv$stage)) NA_integer_ else match(rv$stage, names(RUN_STAGES))
+  if (!is.na(cur_idx) && !is.na(new_idx) && new_idx < cur_idx) {
+    return(invisible())
+  }
 
   now <- Sys.time()
   # Close out the previous stage (if any) as done and freeze its elapsed time.
@@ -370,10 +516,9 @@ update_stage_progress <- function(rv, lines) {
     rv$stage_state[[rv$stage]] <- "done"
     rv$stage_ends[[rv$stage]]  <- now
   }
-  # Mark all earlier stages done (in case we missed their start line because
-  # the log was truncated). No timing info available for retroactive ones.
-  if (latest > 1L) {
-    for (i in seq_len(latest - 1L)) {
+  # Mark every earlier UI stage as done (in case we missed its log line).
+  if (!is.na(new_idx) && new_idx > 1L) {
+    for (i in seq_len(new_idx - 1L)) {
       k <- names(RUN_STAGES)[i]
       if (identical(rv$stage_state[[k]], "pending")) {
         rv$stage_state[[k]] <- "done"
@@ -386,12 +531,23 @@ update_stage_progress <- function(rv, lines) {
   rv$stage_ends[[new_stage_key]]  <- NULL
 }
 
-# Render the 6-row stage list.
-render_stages <- function(stage_state, stage_times, stage_ends, current, run_state) {
+# Render the 6-row stage list. Each row carries a small per-step "Run"
+# button; the button is disabled while a run is active or while the step's
+# upstream artifacts are missing.
+render_stages <- function(stage_state, stage_times, stage_ends, current,
+                          run_state, run_dir, ns) {
+  # When there's no run yet, show an empty stage list so the per-step
+  # buttons are still discoverable (preprocess will be enabled).
   if (is.null(stage_state)) {
-    return(shiny::tags$em("No run yet."))
+    stage_state <- stats::setNames(rep("pending", length(RUN_STAGES)),
+                                   names(RUN_STAGES))
+    stage_times <- stats::setNames(vector("list", length(RUN_STAGES)),
+                                   names(RUN_STAGES))
+    stage_ends  <- stage_times
   }
   now <- Sys.time()
+  is_running <- identical(run_state, RUN_STATE_RUNNING)
+
   rows <- lapply(names(RUN_STAGES), function(key) {
     state <- stage_state[[key]] %||% "pending"
     start <- stage_times[[key]]
@@ -409,15 +565,58 @@ render_stages <- function(stage_state, stage_times, stage_ends, current, run_sta
     )
     elapsed_txt <- if (is.na(elapsed)) "—" else format_elapsed(elapsed)
 
+    pr_check <- check_step_prereqs(key, run_dir)
+    btn_disabled <- is_running ||
+      (!identical(key, "preprocess") && !isTRUE(pr_check$ok))
+    btn_title <- if (is_running) {
+      "A run is already in progress"
+    } else if (!isTRUE(pr_check$ok) && !identical(key, "preprocess")) {
+      sprintf("Requires upstream output: %s",
+              paste(basename(unlist(pr_check$missing)), collapse = ", "))
+    } else {
+      sprintf("Run only the %s step", RUN_STAGES[[key]])
+    }
+
+    btn <- shiny::actionButton(
+      inputId = ns(paste0("run_", key)),
+      label   = "Run",
+      icon    = shiny::icon("play"),
+      class   = "btn-sm btn-outline-secondary",
+      title   = btn_title
+    )
+    if (btn_disabled) btn$attribs$disabled <- "disabled"
+
     shiny::div(
       class = "d-flex align-items-center gap-3 py-1 border-bottom",
-      shiny::div(style = "width: 120px;", badge),
+      shiny::div(style = "width: 110px;", badge),
       shiny::div(style = "flex: 1;", RUN_STAGES[[key]]),
-      shiny::div(class = "text-muted small", style = "width: 100px; text-align: right;",
-                 elapsed_txt)
+      shiny::div(class = "text-muted small", style = "width: 90px; text-align: right;",
+                 elapsed_txt),
+      shiny::div(style = "width: 100px; text-align: right;", btn)
     )
   })
   shiny::tagList(rows)
+}
+
+# Check whether a per-step run can launch against the given run_dir. Returns
+# list(ok = logical, missing = list-of-groups). A "missing" group is a set
+# of paths where none exist (i.e. that requirement is unsatisfied).
+check_step_prereqs <- function(step_key, run_dir) {
+  reqs <- STEP_PREREQS[[step_key]]
+  if (is.null(reqs) || length(reqs) == 0L) {
+    return(list(ok = TRUE, missing = list()))
+  }
+  if (is.null(run_dir) || !dir.exists(run_dir)) {
+    return(list(ok = FALSE, missing = reqs))
+  }
+  missing <- list()
+  for (group in reqs) {
+    paths <- file.path(run_dir, group)
+    if (!any(file.exists(paths))) {
+      missing[[length(missing) + 1L]] <- group
+    }
+  }
+  list(ok = length(missing) == 0L, missing = missing)
 }
 
 render_state_badge <- function(state, stage, started_at, ended_at) {
