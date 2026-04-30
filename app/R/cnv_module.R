@@ -56,14 +56,32 @@ cnv_module_server <- function(id, results) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Sample selector is populated from the QC report (authoritative list).
+    # Sample selector — derive the list from whichever source is available
+    # so per-step CNV runs (which don't produce a QC report) still populate
+    # the dropdown. Order of preference: qc_report (also gives us Pass_QC
+    # info), then sample_info, then scan the CNV figures dir.
     output$sample_selector <- shiny::renderUI({
       r <- results()
-      if (is.null(r) || is.null(r$qc_report)) {
+      if (is.null(r)) {
         return(shiny::tags$em(class = "text-muted",
                               "No completed run yet."))
       }
-      ids <- as.character(r$qc_report$Sample_ID)
+      ids <- if (!is.null(r$qc_report) && nrow(r$qc_report) > 0L) {
+        as.character(r$qc_report$Sample_ID)
+      } else if (!is.null(r$sample_info) && nrow(r$sample_info) > 0L &&
+                 "Sample_ID" %in% colnames(r$sample_info)) {
+        as.character(r$sample_info$Sample_ID)
+      } else {
+        fig_dir <- file.path(r$run_dir, "figures", "cnv")
+        if (dir.exists(fig_dir)) {
+          fs <- list.files(fig_dir, pattern = "_cnv_profile\\.pdf$")
+          sub("_cnv_profile\\.pdf$", "", fs)
+        } else character(0)
+      }
+      if (!length(ids)) {
+        return(shiny::tags$em(class = "text-muted",
+                              "No CNV samples available yet."))
+      }
       shiny::selectInput(ns("sample"), label = NULL,
                          choices = ids, selected = ids[1])
     })
