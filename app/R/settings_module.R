@@ -24,6 +24,23 @@ SETTINGS_DEFAULTS <- list(
   dim_umap_neighbors      = 15L
 )
 
+# Build the "<name> [?] (default X)" label for a numeric input. The info
+# icon is wrapped in a bslib tooltip so hovering reveals the explanation.
+.settings_label <- function(name, default, help_text) {
+  shiny::tagList(
+    name, " ",
+    bslib::tooltip(
+      shiny::icon("circle-info", class = "text-muted",
+                  style = "cursor: help;"),
+      help_text,
+      placement = "right"
+    ),
+    " ",
+    shiny::tags$small(class = "text-muted",
+                      sprintf("(default %s)", default))
+  )
+}
+
 settings_module_ui <- function(id) {
   ns <- shiny::NS(id)
   d  <- SETTINGS_DEFAULTS
@@ -36,16 +53,27 @@ settings_module_ui <- function(id) {
                   "Quality control"),
         shiny::numericInput(
           ns("qc_detection_p"),
-          shiny::tagList("Detection-p threshold ",
-                         shiny::tags$small(class = "text-muted",
-                                           sprintf("(default %s)", d$qc_detection_p))),
+          .settings_label(
+            "Detection-p threshold", d$qc_detection_p,
+            paste(
+              "Per-probe cutoff on the detection p-value.",
+              "Within a sample, a probe is counted as failed when its",
+              "p-value exceeds this. Lower values = stricter calls."
+            )
+          ),
           value = d$qc_detection_p, min = 0, max = 1, step = 0.01
         ),
         shiny::numericInput(
           ns("qc_failed_pct"),
-          shiny::tagList("Failed-probe % threshold ",
-                         shiny::tags$small(class = "text-muted",
-                                           sprintf("(default %s)", d$qc_failed_pct))),
+          .settings_label(
+            "Failed-probe % per sample", d$qc_failed_pct,
+            paste(
+              "Maximum share of failed probes a sample is allowed to have",
+              "before being flagged. Computed within each sample (failed",
+              "probes ÷ total probes × 100), not across the cohort.",
+              "A sample at or above this percent fails QC."
+            )
+          ),
           value = d$qc_failed_pct, min = 0, max = 100, step = 1
         )
       ),
@@ -55,23 +83,41 @@ settings_module_ui <- function(id) {
                   "Dimensionality reduction"),
         shiny::numericInput(
           ns("dim_variable_probes"),
-          shiny::tagList("# variable probes ",
-                         shiny::tags$small(class = "text-muted",
-                                           sprintf("(default %s)", d$dim_variable_probes))),
+          .settings_label(
+            "# variable probes", d$dim_variable_probes,
+            paste(
+              "How many of the most variable CpG probes (by standard",
+              "deviation across samples) to feed into t-SNE / UMAP /",
+              "clustering. More probes = more signal but slower; 10,000",
+              "is a common starting point."
+            )
+          ),
           value = d$dim_variable_probes, min = 100, max = 1e6, step = 1000
         ),
         shiny::numericInput(
           ns("dim_tsne_perplexity"),
-          shiny::tagList("t-SNE perplexity ",
-                         shiny::tags$small(class = "text-muted",
-                                           sprintf("(default %s)", d$dim_tsne_perplexity))),
+          .settings_label(
+            "t-SNE perplexity", d$dim_tsne_perplexity,
+            paste(
+              "t-SNE's neighborhood size — roughly the effective number",
+              "of neighbors each point considers. Use small values (2–5)",
+              "for tiny cohorts (<15 samples); 30 is typical for hundreds.",
+              "Must be less than the number of samples."
+            )
+          ),
           value = d$dim_tsne_perplexity, min = 1, max = 100, step = 1
         ),
         shiny::numericInput(
           ns("dim_umap_neighbors"),
-          shiny::tagList("UMAP neighbors ",
-                         shiny::tags$small(class = "text-muted",
-                                           sprintf("(default %s)", d$dim_umap_neighbors))),
+          .settings_label(
+            "UMAP neighbors", d$dim_umap_neighbors,
+            paste(
+              "UMAP's local-vs-global trade-off. Smaller values preserve",
+              "fine local structure (clusters); larger values preserve",
+              "global topology at the cost of detail. 15 is the package",
+              "default."
+            )
+          ),
           value = d$dim_umap_neighbors, min = 2, max = 200, step = 1
         )
       )
