@@ -199,7 +199,7 @@ help_module_ui <- function(id) {
     # --- Settings ------------------------------------------------------
     shiny::h3("Settings (tunable parameters)"),
     shiny::p(
-      "Five knobs on the Run tab. Defaults match ",
+      "Six knobs on the Run tab. Defaults match ",
       shiny::tags$code("pipeline_modules/config.R$default_config"),
       "; overrides apply to the next launch only and are persisted in the ",
       "run's ", shiny::tags$code("run_manifest.json"),
@@ -219,7 +219,10 @@ help_module_ui <- function(id) {
         " (default 5) — must be smaller than the sample count; small ",
         "cohorts often need 2–3."),
       shiny::tags$li(shiny::tags$strong("UMAP neighbors"),
-        " (default 15) — local-vs-global trade-off.")
+        " (default 15) — local-vs-global trade-off."),
+      shiny::tags$li(shiny::tags$strong("CNV call threshold"),
+        " (default 0.18) — absolute seg.mean cutoff for calling gains/losses ",
+        "in the CNV frequency plot. Lower = more sensitive.")
     ),
 
     shiny::hr(),

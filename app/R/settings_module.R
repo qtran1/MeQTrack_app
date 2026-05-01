@@ -21,7 +21,8 @@ SETTINGS_DEFAULTS <- list(
   qc_failed_pct           = 25,
   dim_variable_probes     = 10000L,
   dim_tsne_perplexity     = 5L,
-  dim_umap_neighbors      = 15L
+  dim_umap_neighbors      = 15L,
+  cnv_threshold           = 0.18
 )
 
 # Build the "<name> [?] (default X)" label for a numeric input. The info
@@ -120,6 +121,24 @@ settings_module_ui <- function(id) {
           ),
           value = d$dim_umap_neighbors, min = 2, max = 200, step = 1
         )
+      ),
+      shiny::div(
+        class = "col-md-6",
+        shiny::h6(class = "text-muted text-uppercase small fw-semibold",
+                  "Copy-number variation"),
+        shiny::numericInput(
+          ns("cnv_threshold"),
+          .settings_label(
+            "CNV call threshold", d$cnv_threshold,
+            paste(
+              "Absolute seg.mean cutoff for calling a segment as a gain",
+              "or loss. Segments with |seg.mean| ≥ this are flagged in",
+              "the frequency plot and the segment heatmap. Lower values",
+              "= more sensitive (more calls); 0.18 is the conumee default."
+            )
+          ),
+          value = d$cnv_threshold, min = 0, max = 1, step = 0.01
+        )
       )
     ),
     shiny::div(
@@ -166,7 +185,9 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
         dim.tsne_perplexity               = integer_or_default(
           input$dim_tsne_perplexity, SETTINGS_DEFAULTS$dim_tsne_perplexity),
         dim.umap_n_neighbors              = integer_or_default(
-          input$dim_umap_neighbors, SETTINGS_DEFAULTS$dim_umap_neighbors)
+          input$dim_umap_neighbors, SETTINGS_DEFAULTS$dim_umap_neighbors),
+        cnv.threshold                     = numeric_or_default(
+          input$cnv_threshold, SETTINGS_DEFAULTS$cnv_threshold)
       )
     })
   })
@@ -204,7 +225,8 @@ apply_params_to_inputs <- function(session, params) {
     qc_failed_pct       = params$qc.failed_probe_percent_threshold,
     dim_variable_probes = params$dim.variable_probes,
     dim_tsne_perplexity = params$dim.tsne_perplexity,
-    dim_umap_neighbors  = params$dim.umap_n_neighbors
+    dim_umap_neighbors  = params$dim.umap_n_neighbors,
+    cnv_threshold       = params$cnv.threshold
   )
   for (input_id in names(pairs)) {
     v <- pairs[[input_id]]
