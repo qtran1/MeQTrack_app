@@ -7,8 +7,8 @@ past-runs library, tunable parameters, per-step execution, UI polish).
 Bump `MEQTRACK_VERSION` in `pipeline/methylation_pipeline.R` to
 `"1.1.0"` when this release ships.
 
-**v2.0.0 is reserved** for the reference-projection feature — see the
-"Next major release" section at the bottom of this doc.
+**v2.0.0 is reserved** for the reference-projection feature — its
+scope lives in [`goals_v4.md`](goals_v4.md).
 
 The themes below are the scope of v1.1.0.
 
@@ -56,32 +56,3 @@ UI design refresh, ready to pick up when prioritized:
 ## New themes (placeholder — fill in)
 
 _Add v1.1.0-era goals below._
-
----
-
-## Next major release — v2.0.0 (reference projection)
-
-**Vision:** incorporate curated public reference methylome datasets —
-**COMET** and **Capper et al. 2018** (central nervous system tumor
-classifier, ~91 tumor classes) — into the dimensionality reduction
-views. Users upload their own IDATs as usual, and their samples are
-*projected onto* the reference t-SNE / UMAP embeddings instead of being
-clustered only against each other. This lets a single user's sample be
-positioned against thousands of labeled tumor methylomes, surfacing the
-nearest reference class(es) as a diagnostic hint.
-
-**Key implementation questions to resolve before committing to scope:**
-
-- Data distribution. Both reference sets are too large to bundle in the
-  release zip. Likely path: Bioconductor ExperimentHub (idiomatic) or
-  GitHub Releases + lazy download-on-first-use (faster to ship).
-- Projection math. UMAP has a native `transform()` for projecting new
-  points onto a trained embedding. t-SNE is non-parametric by default;
-  options are openTSNE (parametric t-SNE) or a k-NN-in-embedding
-  approximation.
-- UI. Reference points should be visually distinct from user samples
-  (gray/neutral) with class labels on hover; user samples keep the
-  teal/brown theme tokens. Probably a toggle for "show/hide reference"
-  and a class-filter dropdown.
-- Scope discipline. This is not a small feature — keep v2.0.0 focused
-  on projection as the single marquee capability.
