@@ -26,7 +26,10 @@ past_runs_module_ui <- function(id) {
                           class = "btn-sm btn-outline-secondary")
     ),
     shiny::uiOutput(ns("attached_banner")),
-    DT::DTOutput(ns("runs_table"))
+    shinycssloaders::withSpinner(
+      DT::DTOutput(ns("runs_table")),
+      type = 7, color = COLORS$primary
+    )
   )
 }
 

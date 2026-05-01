@@ -111,7 +111,8 @@ cran_packages <- c(
   "dendextend", "circlize", "htmlwidgets", "rmarkdown", "knitr",
   "DT", "yaml", "ggrepel", "RColorBrewer",
   # App runtime
-  "shiny", "bslib", "shinyFiles", "promises", "future", "callr",
+  "shiny", "bslib", "shinyFiles", "shinycssloaders",
+  "promises", "future", "callr",
   "ggdendro", "jsonlite",
   # Needed for the conumee2 GitHub fallback (supports `subdir = ...`)
   "remotes"

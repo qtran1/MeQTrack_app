@@ -19,7 +19,10 @@ dimred_module_ui <- function(id) {
       shiny::uiOutput(ns("tsne_header")),
       shiny::fluidRow(
         shiny::column(3, shiny::uiOutput(ns("tsne_color_selector"))),
-        shiny::column(9, plotly::plotlyOutput(ns("tsne_plot"), height = "600px"))
+        shiny::column(9, shinycssloaders::withSpinner(
+          plotly::plotlyOutput(ns("tsne_plot"), height = "600px"),
+          type = 7, color = COLORS$primary
+        ))
       )
     ),
     bslib::nav_panel(
@@ -27,13 +30,19 @@ dimred_module_ui <- function(id) {
       shiny::uiOutput(ns("umap_header")),
       shiny::fluidRow(
         shiny::column(3, shiny::uiOutput(ns("umap_color_selector"))),
-        shiny::column(9, plotly::plotlyOutput(ns("umap_plot"), height = "600px"))
+        shiny::column(9, shinycssloaders::withSpinner(
+          plotly::plotlyOutput(ns("umap_plot"), height = "600px"),
+          type = 7, color = COLORS$primary
+        ))
       )
     ),
     bslib::nav_panel(
       "Dendrogram",
       shiny::uiOutput(ns("dendro_header")),
-      plotly::plotlyOutput(ns("dendro_plot"), height = "600px")
+      shinycssloaders::withSpinner(
+        plotly::plotlyOutput(ns("dendro_plot"), height = "600px"),
+        type = 7, color = COLORS$primary
+      )
     )
   )
 }

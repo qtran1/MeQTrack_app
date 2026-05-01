@@ -15,7 +15,10 @@ qc_module_ui <- function(id) {
     bslib::nav_panel(
       "Sample metrics",
       shiny::uiOutput(ns("summary_banner")),
-      DT::DTOutput(ns("qc_table"))
+      shinycssloaders::withSpinner(
+        DT::DTOutput(ns("qc_table")),
+        type = 7, color = COLORS$primary
+      )
     ),
     bslib::nav_panel(
       "Density plot",
