@@ -9,6 +9,24 @@
 # smaller, and matches what the shareable HTML report already shows.
 # ---------------------------------------------------------------------------
 
+# Plain-English explanations attached as native title attributes to the QC
+# table's column headers. Hover-to-read; no Bootstrap init needed.
+QC_COL_TOOLTIPS <- list(
+  Sample_ID               = "Sentrix ID identifying this sample.",
+  Mean_Detection_P        = "Average detection p-value across all probes for this sample. Lower is better; healthy samples typically sit near 0.001.",
+  Failed_Probes_Count     = "Number of probes whose detection p-value exceeds the per-probe threshold (default 0.01).",
+  Failed_Probes_Percent   = "Percent of probes that failed the detection-p check, within this sample. Compared against the failed-probe % threshold.",
+  Median_Meth_Intensity   = "log2 median methylated-channel intensity (raw, pre-normalization).",
+  Median_Unmeth_Intensity = "log2 median unmethylated-channel intensity (raw, pre-normalization).",
+  Pass_QC                 = "TRUE = sample passed both the mean-detection-p and failed-probe checks.",
+  Flag_Mean_DetP          = "TRUE when the sample's mean detection-p exceeds the cohort threshold (default 0.05).",
+  Flag_Failed_Probes      = "TRUE when the failed-probe percent reaches the threshold (default 25%).",
+  Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
+  SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
+  SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",
+  SWAN_Recoverable        = "TRUE when SWAN normalization brings intensities above threshold — the low-intensity flag was a scanner-gain artifact, not a true failure."
+)
+
 qc_module_ui <- function(id) {
   ns <- shiny::NS(id)
   bslib::navset_tab(
@@ -70,6 +88,7 @@ qc_module_server <- function(id, results) {
       if ("Pass_QC" %in% colnames(df)) {
         df$Pass_QC <- ifelse(as.logical(df$Pass_QC), "TRUE", "FALSE")
       }
+      numeric_cols <- which(vapply(df, is.numeric, logical(1)))
       dt <- DT::datatable(
         df,
         rownames = FALSE,
@@ -80,7 +99,12 @@ qc_module_server <- function(id, results) {
           pageLength = 25,
           scrollX = TRUE,
           autoWidth = FALSE,
-          dom = "ltip"
+          dom = "ltip",
+          headerCallback = dt_header_tooltips(QC_COL_TOOLTIPS),
+          columnDefs = if (length(numeric_cols)) list(list(
+            className = "dt-right",
+            targets = as.integer(numeric_cols - 1L)
+          )) else list()
         )
       )
       if ("Pass_QC" %in% colnames(df)) {

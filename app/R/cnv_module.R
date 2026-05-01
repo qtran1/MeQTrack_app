@@ -152,7 +152,8 @@ cnv_module_server <- function(id, results) {
       r <- results()
       if (is.null(r) || is.null(r$cnv) || is.null(r$cnv$segments)) {
         return(plotly::plot_ly() |>
-                 plotly::layout(title = "No CNV segments available."))
+                 plotly::layout(title = "No CNV segments available.") |>
+                 plotly_defaults())
       }
       cap <- input$heatmap_cap %||% 0.3
       cnv_segment_heatmap(r$cnv$segments, r$qc_fail_ids, cap = cap)
@@ -183,7 +184,8 @@ cnv_segment_heatmap <- function(segments, qc_fail_ids, cap = 0.3) {
 
   if (any(vapply(list(c_id, c_chr, c_from, c_to, c_mean), is.null, logical(1)))) {
     return(plotly::plot_ly() |>
-             plotly::layout(title = "Segments missing expected columns"))
+             plotly::layout(title = "Segments missing expected columns") |>
+             plotly_defaults())
   }
 
   df <- data.frame(
