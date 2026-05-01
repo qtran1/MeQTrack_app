@@ -105,6 +105,16 @@ table.dataTable thead th {
   color: #475569;
   border-bottom: 1px solid #e2e8f0 !important;
 }
+/* Headers with a tooltip get a help cursor + a subtle dotted underline so
+ * users notice they can hover for an explanation. */
+table.dataTable thead th[title] {
+  cursor: help;
+  border-bottom: 1px dotted #94a3b8 !important;
+}
+/* Right-aligned numeric columns (set via columnDefs className = "dt-right"
+ * in the modules). DT ships dt-right but this nudges header alignment too. */
+table.dataTable thead th.dt-right,
+table.dataTable td.dt-right { text-align: right; }
 
 /* Custom scrollbar (WebKit). */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

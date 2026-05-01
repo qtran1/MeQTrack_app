@@ -122,6 +122,24 @@ STATUS_PILL_CLASSES <- c(
   neutral   = "bg-secondary"
 )
 
+#' Build a DT headerCallback that attaches native title attributes to
+#' column headers based on a name → text dictionary. Browser-native
+#' tooltips show on hover after a short delay; no Bootstrap init needed.
+#' Pass the result as options = list(headerCallback = dt_header_tooltips(...)).
+dt_header_tooltips <- function(tooltips) {
+  if (!length(tooltips)) return(NULL)
+  json <- jsonlite::toJSON(tooltips, auto_unbox = TRUE)
+  DT::JS(sprintf(
+    "function(thead) {
+      var tt = %s;
+      $('th', thead).each(function() {
+        var n = $(this).text().trim();
+        if (tt[n]) { $(this).attr('title', tt[n]); }
+      });
+    }", json
+  ))
+}
+
 #' Render a status badge.
 #'
 #' @param state    one of names(STATUS_PILL_CLASSES); unknowns fall back
@@ -152,20 +170,35 @@ plotly_defaults <- function(fig) {
     tickfont = list(color = COLORS$ink_500, size = 11),
     titlefont = list(color = COLORS$ink_500, size = 12)
   )
-  plotly::layout(
-    fig,
-    font = list(
-      family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      color  = COLORS$ink_900,
-      size   = 12
-    ),
-    paper_bgcolor = COLORS$surface_0,
-    plot_bgcolor  = COLORS$surface_0,
-    xaxis  = axis_style,
-    yaxis  = axis_style,
-    legend = list(
-      bgcolor = "rgba(0,0,0,0)",
-      font    = list(size = 11, color = COLORS$ink_500)
+  fig |>
+    plotly::layout(
+      font = list(
+        family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        color  = COLORS$ink_900,
+        size   = 12
+      ),
+      paper_bgcolor = COLORS$surface_0,
+      plot_bgcolor  = COLORS$surface_0,
+      xaxis  = axis_style,
+      yaxis  = axis_style,
+      legend = list(
+        bgcolor = "rgba(0,0,0,0)",
+        font    = list(size = 11, color = COLORS$ink_500)
+      )
+    ) |>
+    # Trim the modebar to a consistent set of buttons across every plot.
+    # Hide the plotly logo (we already cite plotly in the docs) and drop
+    # buttons that don't map cleanly to methylation data exploration.
+    plotly::config(
+      displaylogo = FALSE,
+      modeBarButtonsToRemove = c(
+        "select2d", "lasso2d", "autoScale2d",
+        "hoverClosestCartesian", "hoverCompareCartesian",
+        "toggleSpikelines"
+      ),
+      toImageButtonOptions = list(
+        format = "png", filename = "meqtrack_plot",
+        height = 600, width = 800, scale = 2
+      )
     )
-  )
 }

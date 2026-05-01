@@ -77,7 +77,8 @@ dimred_module_server <- function(id, results) {
     output$tsne_plot <- plotly::renderPlotly({
       r <- results()
       if (is.null(r) || is.null(r$tsne)) {
-        return(plotly::plot_ly(type = "scatter", mode = "markers"))
+        return(plotly::plot_ly(type = "scatter", mode = "markers") |>
+                 plotly_defaults())
       }
       scatter_dimred(r$tsne$coords, r$sample_info, r$qc_fail_ids,
                      color_by = input$tsne_color, kind = "t-SNE")
@@ -101,7 +102,8 @@ dimred_module_server <- function(id, results) {
     output$umap_plot <- plotly::renderPlotly({
       r <- results()
       if (is.null(r) || is.null(r$umap)) {
-        return(plotly::plot_ly(type = "scatter", mode = "markers"))
+        return(plotly::plot_ly(type = "scatter", mode = "markers") |>
+                 plotly_defaults())
       }
       scatter_dimred(r$umap$coords, r$sample_info, r$qc_fail_ids,
                      color_by = input$umap_color, kind = "UMAP")
@@ -125,7 +127,8 @@ dimred_module_server <- function(id, results) {
       r <- results()
       if (is.null(r) || is.null(r$hclust) || is.null(r$hclust$hclust)) {
         return(plotly::plot_ly() |>
-                 plotly::layout(title = "No hierarchical clustering results"))
+                 plotly::layout(title = "No hierarchical clustering results") |>
+                 plotly_defaults())
       }
       dendro_plotly(r$hclust$hclust, r$qc_fail_ids)
     })
@@ -160,7 +163,8 @@ scatter_dimred <- function(coords, sample_info, qc_fail_ids,
   coord_cols <- detect_coord_cols(df)
   if (is.null(coord_cols)) {
     return(plotly::plot_ly() |>
-             plotly::layout(title = paste(kind, "— unexpected coords shape")))
+             plotly::layout(title = paste(kind, "— unexpected coords shape")) |>
+             plotly_defaults())
   }
 
   # Sample IDs live in rownames(coords) — the pipeline leaves any in-frame
@@ -264,7 +268,8 @@ detect_id_col <- function(df) {
 dendro_plotly <- function(hc, qc_fail_ids) {
   if (!requireNamespace("ggdendro", quietly = TRUE)) {
     return(plotly::plot_ly() |>
-             plotly::layout(title = "ggdendro package not available"))
+             plotly::layout(title = "ggdendro package not available") |>
+             plotly_defaults())
   }
   dd  <- ggdendro::dendro_data(hc, type = "rectangle")
   seg <- ggdendro::segment(dd)

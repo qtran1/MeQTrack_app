@@ -13,6 +13,18 @@
 #   past_runs_module_server(id, workspace) -> reactive selected_run_dir | NULL
 # ---------------------------------------------------------------------------
 
+PAST_RUNS_COL_TOOLTIPS <- list(
+  `Run ID`     = "Timestamped folder name under <workspace>/runs/. Format: YYYYMMDD-HHMMSS_<samplesheet>.",
+  Started      = "When the run was launched (local time).",
+  Samplesheet  = "Name of the samplesheet CSV the run was launched against.",
+  Array        = "Methylation array type detected from the IDATs (450K / EPIC / EPICv2).",
+  `Last step`  = "The pipeline step requested for this run. 'all' = full pipeline, otherwise the single per-step name.",
+  Status       = "Final state of the run: completed (exit 0), failed (non-zero exit), running (still active), cancelled (user stopped it).",
+  Exit         = "Process exit code. 0 means success; 137 typically means the OS killed the process for being out of memory.",
+  `# samples`  = "Sample count derived from the QC report (preferred) or processed_data/sample_info.txt. NA if neither file exists yet.",
+  Action       = "Click Open to attach this run as the active session — result tabs render its artifacts and per-step buttons start operating against it."
+)
+
 past_runs_module_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
@@ -88,6 +100,12 @@ past_runs_module_server <- function(id, workspace) {
           order = list(),
           autoWidth = FALSE,
           dom = "ltip",
+          headerCallback = dt_header_tooltips(PAST_RUNS_COL_TOOLTIPS),
+          columnDefs = list(
+            list(className = "dt-right",
+                 targets = which(colnames(display) %in%
+                                   c("Exit", "# samples")) - 1L)
+          ),
           drawCallback = DT::JS(sprintf(
             "function(settings) {
               var ns = '%s';
