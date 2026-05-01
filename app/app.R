@@ -243,14 +243,13 @@ server <- function(input, output, session) {
     }
     st <- ss_state()
     if (isTRUE(st$valid)) {
-      tags$span(class = "badge bg-success me-2",
-                icon("circle-check"), " Samplesheet OK")
+      status_pill("ok", "Samplesheet OK",
+                  icon = "circle-check", class = "me-2")
     } else if (!is.null(st$samplesheet_path)) {
-      tags$span(class = "badge bg-warning text-dark me-2",
-                icon("triangle-exclamation"), " Samplesheet has issues")
+      status_pill("warning", "Samplesheet has issues",
+                  icon = "triangle-exclamation", class = "me-2")
     } else {
-      tags$span(class = "badge bg-secondary me-2",
-                "No samplesheet loaded")
+      status_pill("neutral", "No samplesheet loaded", class = "me-2")
     }
   })
 

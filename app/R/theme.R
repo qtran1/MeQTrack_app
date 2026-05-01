@@ -92,6 +92,55 @@ theme_meqtrack_gg <- function(base_size = 12) {
     )
 }
 
+# ---------------------------------------------------------------------------
+# status_pill — single source of truth for Bootstrap state badges.
+#
+# Replaces inline tags$span(class = "badge bg-X") calls that used to live
+# in run_controller, samplesheet_module, app.R, etc. Same visual output,
+# one place to change colors / aliases / typography.
+#
+# Synonym aliases mean callers can use whichever vocabulary fits the call
+# site (idle/neutral/pending all render gray; ok/done/success all render
+# green) without per-site mapping.
+# ---------------------------------------------------------------------------
+STATUS_PILL_CLASSES <- c(
+  ok        = "bg-success",
+  done      = "bg-success",
+  success   = "bg-success",
+  completed = "bg-success",
+  warn      = "bg-warning text-dark",
+  warning   = "bg-warning text-dark",
+  cancelled = "bg-warning text-dark",
+  fail      = "bg-danger",
+  failed    = "bg-danger",
+  danger    = "bg-danger",
+  running   = "bg-primary",
+  active    = "bg-primary",
+  info      = "bg-primary",
+  pending   = "bg-secondary",
+  idle      = "bg-secondary",
+  neutral   = "bg-secondary"
+)
+
+#' Render a status badge.
+#'
+#' @param state    one of names(STATUS_PILL_CLASSES); unknowns fall back
+#'                 to neutral gray rather than erroring.
+#' @param label    visible text. Defaults to state.
+#' @param icon     optional Font Awesome icon name (e.g. "circle-check");
+#'                 prepended with a half-em space.
+#' @param class    extra utility classes (e.g. "me-2") appended verbatim.
+status_pill <- function(state, label = NULL, icon = NULL, class = NULL) {
+  cls <- STATUS_PILL_CLASSES[state]
+  if (length(cls) == 0L || is.na(cls)) cls <- "bg-secondary"
+  text <- if (is.null(label)) state else label
+  shiny::tags$span(
+    class = paste("badge", cls, class),
+    if (!is.null(icon)) shiny::tagList(shiny::icon(icon), " "),
+    text
+  )
+}
+
 # Layer MeQTrack font + muted axis styling onto an existing plotly figure.
 # Safe to call as the final step in a |>-chain — plotly::layout does a
 # deep merge so per-axis titles set earlier (e.g. "Height") survive.

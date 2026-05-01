@@ -47,7 +47,10 @@ cnv_module_ui <- function(id) {
           "Lower cap = more saturation for subtle gains/losses. ",
           "Pipeline's call threshold is 0.18.")
       ),
-      plotly::plotlyOutput(ns("heatmap_plot"), height = "600px")
+      shinycssloaders::withSpinner(
+        plotly::plotlyOutput(ns("heatmap_plot"), height = "600px"),
+        type = 7, color = COLORS$primary
+      )
     )
   )
 }

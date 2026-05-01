@@ -635,14 +635,7 @@ render_stages <- function(stage_state, stage_times, stage_ends, current,
     endpoint <- if (!is.null(end)) end else now
     elapsed <- if (is.null(start)) NA else as.numeric(difftime(endpoint, start, units = "secs"))
 
-    badge <- switch(
-      state,
-      pending = shiny::tags$span(class = "badge bg-secondary", "pending"),
-      running = shiny::tags$span(class = "badge bg-primary", "running"),
-      done    = shiny::tags$span(class = "badge bg-success", "done"),
-      failed  = shiny::tags$span(class = "badge bg-danger", "failed"),
-      shiny::tags$span(class = "badge bg-secondary", state)
-    )
+    badge <- status_pill(state)
     elapsed_txt <- if (is.na(elapsed)) "—" else format_elapsed(elapsed)
 
     pr_check <- check_step_prereqs(key, run_dir)
@@ -728,23 +721,16 @@ check_step_prereqs <- function(step_key, run_dir) {
 render_state_badge <- function(state, stage, started_at, ended_at) {
   switch(
     state,
-    idle = shiny::tags$span(class = "badge bg-secondary", "Idle"),
-    running = {
-      label <- if (!is.na(stage)) {
-        sprintf("Running: %s", RUN_STAGES[[stage]])
-      } else {
-        "Running"
-      }
-      shiny::tags$span(class = "badge bg-primary",
-                       shiny::icon("spinner"), " ", label)
+    idle      = status_pill("idle", "Idle"),
+    running   = {
+      label <- if (!is.na(stage)) sprintf("Running: %s", RUN_STAGES[[stage]])
+               else "Running"
+      status_pill("running", label, icon = "spinner")
     },
-    completed = shiny::tags$span(class = "badge bg-success",
-                                 shiny::icon("circle-check"), " Completed"),
-    failed = shiny::tags$span(class = "badge bg-danger",
-                              shiny::icon("triangle-exclamation"), " Failed"),
-    cancelled = shiny::tags$span(class = "badge bg-warning text-dark",
-                                 shiny::icon("ban"), " Cancelled"),
-    shiny::tags$span(class = "badge bg-secondary", state)
+    completed = status_pill("completed", "Completed", icon = "circle-check"),
+    failed    = status_pill("failed",    "Failed",    icon = "triangle-exclamation"),
+    cancelled = status_pill("cancelled", "Cancelled", icon = "ban"),
+    status_pill("neutral", state)
   )
 }
 
