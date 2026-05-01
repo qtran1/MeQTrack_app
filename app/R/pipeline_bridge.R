@@ -222,6 +222,9 @@ bridge_kill <- function(handle) {
   if (!is.null(parameters$dim.umap_n_neighbors)) {
     cfg$dim_reduction$umap$n_neighbors <- parameters$dim.umap_n_neighbors
   }
+  if (!is.null(parameters$cnv.threshold)) {
+    cfg$cnv$threshold <- parameters$cnv.threshold
+  }
   if (!length(cfg)) return(NULL)
   path <- file.path(output_dir, "run_config.R")
   # Serialize via dput so we don't hand-roll R syntax. Wrapping in a named
