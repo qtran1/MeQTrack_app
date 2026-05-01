@@ -43,6 +43,7 @@ source(file.path("R", "qc_module.R"),          local = FALSE)
 source(file.path("R", "dimred_module.R"),      local = FALSE)
 source(file.path("R", "cnv_module.R"),         local = FALSE)
 source(file.path("R", "report_module.R"),      local = FALSE)
+source(file.path("R", "help_module.R"),        local = FALSE)
 
 # ---------------------------------------------------------------------------
 # First-launch workspace creation
@@ -67,6 +68,7 @@ qc_ui        <- qc_module_ui("qc")
 dimred_ui    <- dimred_module_ui("dimred")
 cnv_ui       <- cnv_module_ui("cnv")
 report_ui    <- report_module_ui("report")
+help_ui      <- help_module_ui("help")
 
 ui <- bslib::page_navbar(
   id = "main_nav",
@@ -165,6 +167,13 @@ ui <- bslib::page_navbar(
       bslib::card_body(report_ui, fillable = FALSE)
     )
   ),
+  bslib::nav_panel(
+    title = "Help", icon = icon("circle-question"),
+    bslib::card(
+      bslib::card_header("Getting started"),
+      bslib::card_body(help_ui, fillable = FALSE)
+    )
+  ),
   # -----------------------------------------------------------------
   # Footer / status strip
   # -----------------------------------------------------------------
@@ -222,6 +231,7 @@ server <- function(input, output, session) {
   dimred_module_server("dimred", results)
   cnv_module_server("cnv",       results)
   report_module_server("report", results)
+  help_module_server("help")
 
   # Header status (top-right): once a run has started, surface its state;
   # otherwise fall back to samplesheet readiness.
