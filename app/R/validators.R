@@ -15,12 +15,68 @@
 REQUIRED_COLUMNS <- c("Sentrix_ID", "Sample_Name", "Basename")
 
 # Row-level status codes surfaced in the UI validation table.
+# Cross-platform "free bytes on the filesystem holding `path`". Returns
+# NA_real_ when the platform tool isn't available or output can't be
+# parsed. Used by the run controller for a pre-flight disk-space check
+# before kicking off a pipeline run.
+free_bytes <- function(path) {
+  if (is.null(path) || !nzchar(path)) return(NA_real_)
+  if (!file.exists(path)) {
+    parent <- dirname(path)
+    if (!file.exists(parent)) return(NA_real_)
+    path <- parent
+  }
+  if (.Platform$OS.type == "windows") {
+    drive <- toupper(substr(normalizePath(path, mustWork = FALSE), 1, 2))
+    out <- tryCatch(
+      system2("fsutil", c("volume", "diskfree", drive),
+              stdout = TRUE, stderr = FALSE),
+      error = function(e) character(0)
+    )
+    # fsutil prints a line with a "free bytes" number — pick the first
+    # large integer in the line containing "Avail" or "free".
+    line <- grep("free|avail", out, ignore.case = TRUE, value = TRUE)
+    if (!length(line)) return(NA_real_)
+    m <- regmatches(line[1], regexpr("\\d{6,}", line[1]))
+    if (!length(m)) return(NA_real_)
+    suppressWarnings(as.numeric(m[1]))
+  } else {
+    out <- tryCatch(
+      system2("df", c("-k", shQuote(path)),
+              stdout = TRUE, stderr = FALSE),
+      error = function(e) character(0)
+    )
+    if (length(out) < 2) return(NA_real_)
+    fields <- strsplit(trimws(out[length(out)]), "\\s+")[[1]]
+    if (length(fields) < 4L) return(NA_real_)
+    avail_kb <- suppressWarnings(as.numeric(fields[4]))
+    if (is.na(avail_kb)) return(NA_real_)
+    avail_kb * 1024
+  }
+}
+
 STATUS_OK               <- "OK"
 STATUS_MISSING_RED      <- "Missing _Red.idat"
 STATUS_MISSING_GRN      <- "Missing _Grn.idat"
 STATUS_MISSING_BOTH     <- "Missing IDAT pair"
 STATUS_DUPLICATE_ID     <- "Duplicate Sentrix_ID"
 STATUS_MALFORMED        <- "Malformed row"
+STATUS_CORRUPT_IDAT     <- "Corrupt IDAT"
+
+# Verify a file looks like an IDAT by reading the first 4 bytes and
+# checking for the "IDAT" magic header. Cheap (<1 ms per file) and
+# catches truncated downloads, files with the wrong extension, or
+# placeholders that minfi would otherwise crash on mid-preprocess.
+idat_magic_ok <- function(path) {
+  if (!file.exists(path)) return(FALSE)
+  con <- tryCatch(file(path, "rb"), error = function(e) NULL)
+  if (is.null(con)) return(FALSE)
+  on.exit(close(con), add = TRUE)
+  bytes <- tryCatch(readBin(con, "raw", n = 4L),
+                    error = function(e) raw(0))
+  if (length(bytes) < 4L) return(FALSE)
+  identical(rawToChar(bytes), "IDAT")
+}
 
 #' Read a samplesheet CSV and return a data.frame + top-level error status.
 #'
@@ -204,8 +260,26 @@ validate_rows <- function(df, samplesheet_dir, pipeline_dir) {
       status[i]     <- STATUS_MISSING_GRN
       status_det[i] <- sprintf("Expected %s, not found.", grn)
     } else {
-      status[i]     <- STATUS_OK
-      status_det[i] <- ""
+      # Both files present — verify they look like real IDATs. minfi will
+      # crash mid-preprocess on a truncated download or a placeholder file
+      # with the .idat extension, with an error far less obvious than this.
+      bad_red <- !idat_magic_ok(red)
+      bad_grn <- !idat_magic_ok(grn)
+      if (bad_red && bad_grn) {
+        status[i]     <- STATUS_CORRUPT_IDAT
+        status_det[i] <- "Both IDATs fail the magic-header check (corrupt or truncated)."
+      } else if (bad_red) {
+        status[i]     <- STATUS_CORRUPT_IDAT
+        status_det[i] <- sprintf("%s fails the IDAT magic-header check (corrupt or truncated).",
+                                 basename(red))
+      } else if (bad_grn) {
+        status[i]     <- STATUS_CORRUPT_IDAT
+        status_det[i] <- sprintf("%s fails the IDAT magic-header check (corrupt or truncated).",
+                                 basename(grn))
+      } else {
+        status[i]     <- STATUS_OK
+        status_det[i] <- ""
+      }
     }
   }
 
