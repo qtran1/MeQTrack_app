@@ -232,6 +232,40 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
         rv$stage_times[[step_key]] <- NULL
       }
 
+      # Pre-flight disk-space check on the workspace volume. We don't
+      # know exactly how much each run will consume but a rough estimate
+      # of ~150 MB/sample + 200 MB buffer catches the obvious "tens of MB
+      # free" case before the pipeline crashes mid-stage with ENOSPC.
+      free <- free_bytes(rv$run_dir)
+      if (!is.na(free)) {
+        n_samples <- if (!is.null(st$validated_df)) {
+          nrow(st$validated_df)
+        } else 1L
+        estimated <- 150 * 1024^2 * n_samples + 200 * 1024^2
+        if (free < 200 * 1024^2) {
+          shiny::showNotification(
+            sprintf(
+              paste("Less than 200 MB free on the workspace volume",
+                    "(%.0f MB). Free space and try again."),
+              free / 1024^2
+            ),
+            type = "error", duration = NULL
+          )
+          return(invisible())
+        }
+        if (free < estimated) {
+          shiny::showNotification(
+            sprintf(
+              paste("Workspace volume has %.1f GB free; this run may need",
+                    "around %.1f GB. Pipeline will crash mid-run if it",
+                    "fills up."),
+              free / 1024^3, estimated / 1024^3
+            ),
+            type = "warning", duration = 12
+          )
+        }
+      }
+
       # Seed the first stage as "running" right now so its clock starts
       # ticking at click time. The pipeline takes a few seconds to bootstrap
       # before emitting its first "Step N:" log line; without this seed,
@@ -420,7 +454,7 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
             rv$stage_state[[rv$stage]] <- "failed"
             rv$stage_ends[[rv$stage]]  <- rv$ended_at
           }
-          rv$error_msg <- extract_last_error(lines)
+          rv$error_msg <- extract_last_error(lines, rv$exit_code)
         }
       }
     })
@@ -752,12 +786,24 @@ render_post_run_actions <- function(ns, state, report_path, log_file,
     ))
   }
 
-  # Failed or cancelled: error message + log + run dir.
+  # Failed or cancelled: friendly hint (when available) + raw error line +
+  # log + run dir buttons. error_msg is now a list(raw, hint); guard for
+  # the legacy bare-string shape just in case.
+  raw  <- if (is.list(error_msg)) error_msg$raw  else error_msg
+  hint <- if (is.list(error_msg)) error_msg$hint else NULL
+
   shiny::tagList(
-    if (!is.null(error_msg) && nzchar(error_msg)) {
+    if (!is.null(hint) && nzchar(hint)) {
+      shiny::div(
+        class = "alert alert-warning",
+        shiny::icon("circle-info"), " ",
+        shiny::tags$strong("Likely cause: "), hint
+      )
+    },
+    if (!is.null(raw) && nzchar(raw)) {
       shiny::div(
         class = "alert alert-danger",
-        shiny::tags$strong("Error: "), error_msg
+        shiny::tags$strong("Error: "), raw
       )
     },
     shiny::actionButton(ns("open_log"),
@@ -819,13 +865,85 @@ discover_report <- function(run_dir) {
   files[order(file.info(files)$mtime, decreasing = TRUE)][1]
 }
 
-# Pull the most useful error line from the log tail. Heuristic: last line
-# starting with "Error" or containing "Error in".
-extract_last_error <- function(lines) {
-  if (!length(lines)) return(NULL)
-  hits <- grep("^Error\\b|Error in ", lines, value = TRUE)
-  if (!length(hits)) return(utils::tail(lines, 1L))
-  utils::tail(hits, 1L)
+# Pull the most useful error line from the log tail and pair it with a
+# human-readable hint when the line matches a known failure pattern.
+# Returns a list(raw, hint) where `hint` may be NULL. The post-run
+# actions panel renders both.
+extract_last_error <- function(lines, exit_code = NA_integer_) {
+  raw <- NULL
+  if (length(lines)) {
+    hits <- grep("^Error\\b|Error in ", lines, value = TRUE)
+    raw <- if (length(hits)) utils::tail(hits, 1L) else utils::tail(lines, 1L)
+  }
+  hint <- diagnose_failure(lines, raw, exit_code)
+  list(raw = raw, hint = hint)
+}
+
+# Map common pipeline failure patterns onto a one-line hint. The order
+# matters — exit-code signals are checked first, then log content.
+diagnose_failure <- function(lines, raw, exit_code = NA_integer_) {
+  text <- paste(c(lines, raw), collapse = "\n")
+
+  # 137 = 128 + SIGKILL on Unix; the kernel's OOM killer is the most
+  # common source. macOS jetsam behaves similarly. 9 (raw SIGKILL) too.
+  if (isTRUE(exit_code %in% c(137L, 9L))) {
+    return(paste(
+      "Process was killed by the operating system, almost certainly out",
+      "of memory. Try running with fewer samples, or on a machine with",
+      "more RAM."
+    ))
+  }
+
+  if (grepl("No space left on device|ENOSPC|Disk quota exceeded",
+            text, ignore.case = TRUE)) {
+    return(paste(
+      "The pipeline ran out of disk space mid-run. Free space on the",
+      "workspace volume and retry — partial outputs from this run can",
+      "be deleted from the run directory."
+    ))
+  }
+
+  if (grepl("cannot allocate vector of size", text, ignore.case = TRUE)) {
+    return(paste(
+      "R ran out of memory allocating an array. This usually means the",
+      "sample × probe matrix is too large for available RAM. Try fewer",
+      "samples per run, or close other applications."
+    ))
+  }
+
+  if (grepl("BiocParallel errors|error reading from connection",
+            text, ignore.case = TRUE)) {
+    return(paste(
+      "A parallel worker crashed — usually a fork-related issue with",
+      "sesame on macOS. Re-running often clears it; if it persists, set",
+      "MEQTRACK_SERIAL=1 in the environment to force serial execution."
+    ))
+  }
+
+  if (grepl("could not find function", text, ignore.case = TRUE)) {
+    return(paste(
+      "A package the pipeline expects isn't installed. Re-run setup.R",
+      "from the project root to refresh the renv library."
+    ))
+  }
+
+  if (grepl("there is no package called", text, ignore.case = TRUE)) {
+    return(paste(
+      "A required R package is missing. Re-run setup.R from the project",
+      "root."
+    ))
+  }
+
+  if (grepl("cannot open .* No such file or directory|cannot find file",
+            text, ignore.case = TRUE)) {
+    return(paste(
+      "The pipeline tried to read a file that isn't on disk. The most",
+      "common cause is a samplesheet pointing at an IDAT path that has",
+      "moved — re-validate the samplesheet before re-running."
+    ))
+  }
+
+  NULL
 }
 
 # Move partial stage subdirs into <run_dir>/_cancelled/ so a cancelled run
