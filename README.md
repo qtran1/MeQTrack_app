@@ -14,23 +14,30 @@ Your data never leaves your laptop.
 ## What it does
 
 Drop a CSV samplesheet pointing at your IDAT files into the app. One
-click runs a six-stage pipeline:
+click runs a five-stage pipeline:
 
 | Stage | What happens |
 |---|---|
-| **Preprocess** | Reads IDATs (auto-detects 450K / EPIC / EPICv2), applies SWAN normalization (or Sesame-based for EPICv2), produces β-values. |
-| **QC** | Per-sample detection-p, failed-probe percentage, intensity medians, bisulfite conversion. Flags samples that fall outside thresholds. |
-| **Filtering** | Removes probes failing detection-p, sex-chromosome probes, SNP-affected probes, cross-reactive probes, and applies array-specific keep-lists. |
-| **Dimensionality reduction** | t-SNE, UMAP, hierarchical clustering on the most variable probes. |
-| **CNV** | Copy-number profile per sample (via conumee2), genome-wide segment calls, frequency plot, and a sample-vs-segment heatmap. |
-| **Report** | A self-contained HTML report you can open in any browser or share by email. |
+| **1. Preprocess** | Reads IDATs (auto-detects 450K / EPIC / EPICv2), applies SWAN normalization (or sesame's QCDB for EPICv2), produces β-values. |
+| **2. QC and probe filtering** | Per-sample detection-p, failed-probe %, intensity medians; flags samples outside thresholds. Then removes sex-chromosome probes, SNP-affected probes, cross-reactive probes, and applies array-specific keep-lists. |
+| **3. Dimensionality reduction** | t-SNE, UMAP, and hierarchical clustering on the most variable probes (default 10,000). |
+| **4. Copy-number variation** | Per-sample CNV via conumee2, genome-wide segment calls, frequency plot, and an in-app segment heatmap. |
+| **5. Report** | A self-contained HTML report you can open in any browser or share by email. |
 
 The Shiny UI surfaces every stage interactively:
 
 - **Samplesheet tab** — pick a CSV, see per-row validation (missing
   IDATs, duplicate IDs, malformed rows) before running anything.
-- **Run tab** — Run / Cancel, live per-stage progress, log tail,
-  post-run actions (open report, reveal in Finder/Explorer).
+- **Run tab** — a Settings card with five tunable parameters
+  (detection-p threshold, failed-probe % per sample, # variable probes,
+  t-SNE perplexity, UMAP neighbors), Run / Cancel controls, the Stages
+  panel with per-stage **▶ Run** buttons for re-running an individual
+  stage, live log tail, and post-run actions.
+- **Past runs tab** — every prior run in your workspace listed
+  newest-first with status, last step, and sample count. Open any row
+  to attach it: result tabs render its artifacts, per-step Run buttons
+  start operating against that run, and the Settings card auto-populates
+  from its saved parameters.
 - **QC tab** — sortable per-sample metrics table, embedded interactive
   density and MDS plots; QC-fail samples are styled distinctly across
   every downstream view.
@@ -42,6 +49,14 @@ The Shiny UI surfaces every stage interactively:
   tunable color-scale cap.
 - **Report tab** — in-app preview of the generated HTML report, plus
   one-click "Open in new tab" and "Show in Finder/Explorer".
+- **Help tab** — single-page Getting Started reference; the in-app
+  walkthrough.
+
+Result tabs populate **as each stage finishes**, not only at end-of-run
+— you can review QC the moment QC completes, without waiting for CNV
+or the report. Combined with per-step Run buttons, you can iterate on a
+single stage (e.g. retry dim. reduction with a different perplexity)
+without re-running preprocessing.
 
 ## Installing & running
 
@@ -87,11 +102,12 @@ is reproducible and you keep your raw data alongside its outputs.
 
 ## Limits & caveats
 
-- One run at a time. The MVP doesn't queue concurrent runs.
+- One run at a time. The app doesn't queue concurrent runs.
 - Sample-size envelope: 1–96 samples per run; tested up to 96 on a
   16 GB machine.
-- Pipeline parameters (detection-p threshold, n_variable_probes, t-SNE
-  perplexity, etc.) are fixed at sensible defaults in the MVP. A
-  Settings UI to tune them is on the roadmap.
+- The Settings card exposes five tunable parameters (QC + dim.
+  reduction). Other pipeline knobs — normalization method, filtering
+  toggles, CNV threshold — are still at their defaults; expanding the
+  Settings surface is on the v1.2 roadmap.
 - The app listens only on `127.0.0.1` (loopback). It is not
   network-accessible, by construction.
