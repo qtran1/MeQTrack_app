@@ -47,35 +47,15 @@ if (r_ver < "4.4.0") {
   )
 }
 
-# Pick the Bioconductor release that matches the R minor version. Bioc
-# pairs strictly with R: each R minor uses its own Bioc release.
-#   R 4.4.x  -> Bioc 3.20
-#   R 4.5.x  -> Bioc 3.21
-#   R 4.6.x  -> Bioc 3.22
-# For R versions newer than what this release was tested against, fall
-# through to NULL and let BiocManager auto-resolve to whatever it thinks
-# is current. The alternative — hard-stopping on every R update — would
-# force a MeQTrack release for every R minor bump, which isn't realistic.
-bioc_version <- if (r_ver >= "4.7.0") {
-  NULL
-} else if (r_ver >= "4.6.0") {
-  "3.22"
-} else if (r_ver >= "4.5.0") {
-  "3.21"
-} else {
-  "3.20"
-}
-
-if (is.null(bioc_version)) {
-  message(sprintf(
-    paste("R %s is newer than this release was tested against (R 4.4–4.6).",
-          "Letting BiocManager pick a Bioconductor release. If installs",
-          "fail, check for a newer MeQTrack release."),
-    r_ver
-  ))
-} else {
-  message(sprintf("Will install Bioconductor %s packages.", bioc_version))
-}
+# Let BiocManager pick the Bioconductor release for the running R. The
+# pairing isn't 1:1 (Bioc has two releases per year against the same R
+# minor — e.g. R 4.5 had both Bioc 3.21 and 3.22) so any hardcoded map
+# we ship would go stale every six months. Passing version = NULL to
+# BiocManager::install() means "use the current release for this R",
+# which is what we want.
+message(sprintf(
+  "Will let BiocManager pick the Bioconductor release for R %s.", r_ver
+))
 
 # Verify we're running from the project root (pipeline/ must exist).
 if (!dir.exists("pipeline") || !file.exists("pipeline/methylation_pipeline.R")) {
@@ -124,14 +104,11 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
   renv::install("BiocManager")
 }
 
-# Pin Bioconductor to the chosen release for this R version. When
-# bioc_version is NULL (R newer than 4.6 — see above), let BiocManager
-# auto-resolve to whatever Bioc release it considers current.
-if (is.null(bioc_version)) {
-  BiocManager::install(update = FALSE, ask = FALSE)
-} else {
-  BiocManager::install(version = bioc_version, update = FALSE, ask = FALSE)
-}
+# Initialize Bioconductor against whatever release pairs with the
+# current R. No version arg means "current" — which is the right
+# choice because Bioc's release schedule (twice a year, paired with R)
+# doesn't fit a hardcoded map.
+BiocManager::install(update = FALSE, ask = FALSE)
 
 # ---------------------------------------------------------------------------
 # 3. CRAN dependencies
@@ -203,7 +180,10 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
   }, error = function(e) FALSE, warning = function(w) FALSE)
 
   if (!isTRUE(bioc_ok)) {
-    bioc_label <- if (is.null(bioc_version)) "(auto-resolved)" else bioc_version
+    bioc_label <- tryCatch(
+      as.character(BiocManager::version()),
+      error = function(e) "(unknown)"
+    )
     message("conumee2 not in Bioc ", bioc_label,
             "; installing from GitHub (hovestadtlab/conumee2, subdir=conumee2)...")
     if (!requireNamespace("remotes", quietly = TRUE)) {

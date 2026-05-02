@@ -116,11 +116,12 @@ This will:
 
 - Install `renv` if you don't have it.
 - Activate `renv` in this project (creates `.Rprofile` + `renv/`).
-- Install CRAN + Bioconductor packages, picking the Bioc release that
-  matches your R minor version: Bioc 3.20 (R 4.4), 3.21 (R 4.5),
-  3.22 (R 4.6). For R ≥ 4.7 the script lets BiocManager auto-resolve.
-  First run takes 5–15 min depending on network and CPU because
-  several Bioc packages compile from source.
+- Install CRAN + Bioconductor packages. Bioconductor's release
+  schedule (twice a year, paired with R) doesn't fit a hardcoded map,
+  so setup.R lets BiocManager pick whatever release is current for
+  your running R — works on R 4.4, 4.5, 4.6, and any future minor R
+  updates. First run takes 5–15 min depending on network and CPU
+  because several Bioc packages compile from source.
 - Install `yamapData` from the bundled
   `pipeline/data/yamapData_0.0.3.tar.gz`.
 - Write `renv.lock` so the environment is reproducible.
