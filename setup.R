@@ -47,10 +47,30 @@ if (r_ver < "4.4.0") {
   )
 }
 
-# Pick Bioconductor release that matches the R minor version.
-# Bioc 3.20 pairs with R 4.4; Bioc 3.21 pairs with R 4.5. Adjust if needed.
-bioc_version <- if (r_ver >= "4.5.0") "3.21" else "3.20"
-message(sprintf("Will install Bioconductor %s packages.", bioc_version))
+# Pick the Bioconductor release that matches the R minor version. Bioc
+# pairs strictly with R: each R minor uses its own Bioc release.
+#   R 4.4.x  -> Bioc 3.20
+#   R 4.5.x  -> Bioc 3.21
+#   R 4.6.x  -> Bioc 3.22
+# For R versions newer than what this release was tested against, fall
+# through to NULL and let BiocManager auto-resolve to whatever it thinks
+# is current. The alternative — hard-stopping on every R update — would
+# force a MeQTrack release for every R minor bump, which isn't realistic.
+bioc_version <- if      (r_ver >= "4.7.0") NULL
+                else if (r_ver >= "4.6.0") "3.22"
+                else if (r_ver >= "4.5.0") "3.21"
+                else                       "3.20"
+
+if (is.null(bioc_version)) {
+  message(sprintf(
+    paste("R %s is newer than this release was tested against (R 4.4–4.6).",
+          "Letting BiocManager pick a Bioconductor release. If installs",
+          "fail, check for a newer MeQTrack release."),
+    r_ver
+  ))
+} else {
+  message(sprintf("Will install Bioconductor %s packages.", bioc_version))
+}
 
 # Verify we're running from the project root (pipeline/ must exist).
 if (!dir.exists("pipeline") || !file.exists("pipeline/methylation_pipeline.R")) {
@@ -99,8 +119,14 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
   renv::install("BiocManager")
 }
 
-# Pin Bioconductor to the chosen release for this R version.
-BiocManager::install(version = bioc_version, update = FALSE, ask = FALSE)
+# Pin Bioconductor to the chosen release for this R version. When
+# bioc_version is NULL (R newer than 4.6 — see above), let BiocManager
+# auto-resolve to whatever Bioc release it considers current.
+if (is.null(bioc_version)) {
+  BiocManager::install(update = FALSE, ask = FALSE)
+} else {
+  BiocManager::install(version = bioc_version, update = FALSE, ask = FALSE)
+}
 
 # ---------------------------------------------------------------------------
 # 3. CRAN dependencies
@@ -172,7 +198,8 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
   }, error = function(e) FALSE, warning = function(w) FALSE)
 
   if (!isTRUE(bioc_ok)) {
-    message("conumee2 not in Bioc ", bioc_version,
+    bioc_label <- if (is.null(bioc_version)) "(auto-resolved)" else bioc_version
+    message("conumee2 not in Bioc ", bioc_label,
             "; installing from GitHub (hovestadtlab/conumee2, subdir=conumee2)...")
     if (!requireNamespace("remotes", quietly = TRUE)) {
       install.packages("remotes", type = "binary",
