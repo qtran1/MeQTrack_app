@@ -22,7 +22,7 @@ rm(list=ls())
 # Process command line arguments
 suppressPackageStartupMessages(library(optparse))
 
-MEQTRACK_VERSION <- "1.1.3"
+MEQTRACK_VERSION <- "1.1.4"
 
 cat("┌───────────────────────────────────────────────────┐\n")
 cat("│                     MeQTrack                      │\n")
