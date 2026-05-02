@@ -8,9 +8,8 @@ REM
 REM Keep the window open while the app is running. Close it to stop the
 REM app.
 REM
-REM NOTE: This launcher is authored in Wave 2 but will not be
-REM smoke-tested on a real Windows 11 host until Wave 5. If you hit issues
-REM before then, fall back to launching via PowerShell:
+REM If you hit launcher-specific issues, fall back to launching directly
+REM from PowerShell or Command Prompt:
 REM     Rscript -e "shiny::runApp('app', launch.browser = TRUE, host = '127.0.0.1')"
 
 setlocal
