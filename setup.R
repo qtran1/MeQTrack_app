@@ -23,9 +23,9 @@ options(repos = c(CRAN = "https://packagemanager.posit.co/cran/latest"))
 # Force binary-only installs on macOS. Recent macOS SDKs (Tahoe / MacOSX26.x)
 # break source compilation for R packages that use C++ — clang can't find
 # <cmath> because libc++ headers moved within the SDK. CRAN and Bioconductor
-# ship arm64 binaries for R 4.5, so we never need to compile from source on
-# this host. If a package has no binary available, fail fast rather than
-# trying to compile it — easier to see and fix.
+# ship arm64 binaries for the supported R versions (4.4 / 4.5 / 4.6), so we
+# never need to compile from source on this host. If a package has no binary
+# available, fail fast rather than trying to compile — easier to see and fix.
 if (.Platform$OS.type == "unix" && Sys.info()[["sysname"]] == "Darwin") {
   options(pkgType = "binary")
   options(install.packages.compile.from.source = "never")
@@ -56,10 +56,15 @@ if (r_ver < "4.4.0") {
 # through to NULL and let BiocManager auto-resolve to whatever it thinks
 # is current. The alternative — hard-stopping on every R update — would
 # force a MeQTrack release for every R minor bump, which isn't realistic.
-bioc_version <- if      (r_ver >= "4.7.0") NULL
-                else if (r_ver >= "4.6.0") "3.22"
-                else if (r_ver >= "4.5.0") "3.21"
-                else                       "3.20"
+bioc_version <- if (r_ver >= "4.7.0") {
+  NULL
+} else if (r_ver >= "4.6.0") {
+  "3.22"
+} else if (r_ver >= "4.5.0") {
+  "3.21"
+} else {
+  "3.20"
+}
 
 if (is.null(bioc_version)) {
   message(sprintf(
