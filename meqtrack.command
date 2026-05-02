@@ -57,7 +57,18 @@ fi
 #    and would balloon the zip). On first launch we need to populate the
 #    library — setup.R handles renv::restore + Bioconductor + yamapData
 #    and is safe to re-run (no-op when already provisioned).
-if [ ! -d "renv/library" ] || [ -z "$(ls -A renv/library 2>/dev/null)" ]; then
+#
+#    We probe by trying to load `shiny`, NOT by checking if renv/library/
+#    exists. R keys its library by minor version (R-4.5 vs R-4.6 are
+#    separate subdirs), so a user who upgrades R between launches has a
+#    populated renv/library/ that still fails to load anything against
+#    the new R. requireNamespace catches that case; setup.R then
+#    populates the library against the current R.
+NEED_SETUP=0
+if ! Rscript -e 'quit(status = !requireNamespace("shiny", quietly = TRUE))' >/dev/null 2>&1; then
+  NEED_SETUP=1
+fi
+if [ "$NEED_SETUP" = "1" ]; then
   echo
   echo "  First-time setup: installing R packages."
   echo "  This takes 5-15 minutes on first run; subsequent launches are instant."

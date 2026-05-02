@@ -55,7 +55,17 @@ REM 3. First-launch provisioning. The distribution zip ships renv.lock and
 REM    renv\activate.R but NOT the renv\library\ cache (machine-specific,
 REM    would balloon the zip). On first launch we populate the library via
 REM    setup.R (idempotent — no-op when already provisioned).
-if not exist "renv\library\NUL" (
+REM
+REM    We probe by trying to load `shiny`, NOT by checking if renv\library\
+REM    exists. R keys its library by minor version (R-4.5 vs R-4.6 are
+REM    separate subdirs), so a user who upgrades R between launches has a
+REM    populated renv\library\ that still fails to load anything against
+REM    the new R. requireNamespace catches that case; setup.R then
+REM    populates the library against the current R.
+set NEED_SETUP=0
+Rscript -e "quit(status = !requireNamespace('shiny', quietly = TRUE))" >nul 2>&1
+if errorlevel 1 set NEED_SETUP=1
+if "%NEED_SETUP%"=="1" (
   echo.
   echo   First-time setup: installing R packages.
   echo   This takes 5-15 minutes on first run; subsequent launches are instant.
