@@ -147,6 +147,13 @@ bioc_packages <- c(
   # core analysis
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
   "DMRcate", "GenomicRanges", "sesame", "Gviz",
+  # Bioc experiment-data companions. These are nominally pulled in as
+  # dependencies of their parent packages, but BiocManager has been
+  # observed to silently skip them on macOS (no binary, source build
+  # fails to fetch the data payload, etc.) and the parent then fails to
+  # load at runtime with "package X required by Y could not be found".
+  # Listing them explicitly forces the install.
+  "sesameData",
   # Illumina 450K / EPIC / EPICv2 manifests + annotations
   "IlluminaHumanMethylation450kmanifest",
   "IlluminaHumanMethylation450kanno.ilmn12.hg19",
@@ -246,7 +253,7 @@ required_pkgs <- c(
   "DT", "ggrepel", "RColorBrewer", "rmarkdown", "knitr",
   # Bioc
   "minfi", "limma", "missMethyl", "matrixStats", "DMRcate", "sesame",
-  "conumee2",
+  "sesameData", "conumee2",
   # Local tarball
   "yamapData"
 )
@@ -265,7 +272,49 @@ if (length(missing_pkgs) > 0) {
 }
 
 # ---------------------------------------------------------------------------
-# 7. Snapshot lockfile
+# 7. Pre-cache sesame data via ExperimentHub.
+# ---------------------------------------------------------------------------
+# sesame's openSesame() / pOOBAH() (called by the preprocess step) need
+# data files (IDAT signatures, platform manifests, normalization tables)
+# that aren't shipped with the sesame/sesameData packages — they're
+# fetched lazily on first use via ExperimentHub. A fresh install therefore
+# fails preprocess with `stopAndCache("idatSignature")` even though all
+# packages are installed correctly. Pre-cache here so the (potentially
+# multi-minute) download happens during setup, not mid-pipeline.
+message("Caching sesame data via ExperimentHub (one-time, may take several minutes)...")
+sesame_cache_ok <- tryCatch({
+  sesameData::sesameDataCache()
+  TRUE
+}, error = function(e) {
+  message("sesameDataCache() failed: ", conditionMessage(e))
+  FALSE
+})
+if (!isTRUE(sesame_cache_ok)) {
+  stop(
+    "sesameDataCache() did not complete. The pipeline's preprocess step ",
+    "needs sesame data files cached locally; without them sesame::openSesame() ",
+    "fails with 'File idatSignature either not found or needs to be cached'.\n",
+    "  Re-run setup.R after fixing network access to ExperimentHub, or run ",
+    "`sesameData::sesameDataCache()` manually in R from the project root."
+  )
+}
+# Sanity-check the specific data file the preprocess step needs first.
+idat_sig_ok <- tryCatch({
+  invisible(sesameData::sesameDataGet("idatSignature"))
+  TRUE
+}, error = function(e) {
+  message("sesameDataGet('idatSignature') failed: ", conditionMessage(e))
+  FALSE
+})
+if (!isTRUE(idat_sig_ok)) {
+  stop(
+    "sesameDataCache() reported success but 'idatSignature' is still not ",
+    "retrievable. Check ExperimentHub connectivity and try again."
+  )
+}
+
+# ---------------------------------------------------------------------------
+# 8. Snapshot lockfile
 # ---------------------------------------------------------------------------
 message("Writing renv.lock...")
 # type = "implicit" scans only packages actually referenced by project R
