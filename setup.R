@@ -135,8 +135,17 @@ message("Installing CRAN packages (may take a while on first run)...")
 # but not actually installed (leaving the library incomplete). Going through
 # install.packages() + the binary-only options above is more reliable on
 # macOS Tahoe hosts.
-install.packages(cran_packages, type = "binary",
-                 repos = "https://packagemanager.posit.co/cran/latest")
+#
+# repos is a 2-element fallback chain: PPM first (faster, hosts the freshest
+# arm64 binaries), then CRAN mainline. PPM occasionally lacks a binary for
+# the newest R minor (e.g. devtools missing for R 4.6 / arm64-darwin) — in
+# that case install.packages falls through to CRAN mainline rather than
+# failing the whole setup.
+.cran_repos <- c(
+  PPM  = "https://packagemanager.posit.co/cran/latest",
+  CRAN = "https://cran.r-project.org"
+)
+install.packages(cran_packages, type = "binary", repos = .cran_repos)
 
 # ---------------------------------------------------------------------------
 # 4. Bioconductor dependencies
@@ -147,6 +156,13 @@ bioc_packages <- c(
   # core analysis
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
   "DMRcate", "GenomicRanges", "sesame", "Gviz",
+  # conumee2 transitive deps. conumee2 is installed from GitHub below
+  # and its source build needs methylumi to load (methylumi in turn
+  # requires FDb.InfiniumMethylation.hg19). devtools::install_github
+  # doesn't reliably resolve these via BiocManager — easier to install
+  # them explicitly here so they're already in the renv library when
+  # conumee2 is built.
+  "methylumi", "FDb.InfiniumMethylation.hg19",
   # Bioc experiment-data companions. These are nominally pulled in as
   # dependencies of their parent packages, but BiocManager has been
   # observed to silently skip them on macOS (no binary, source build
@@ -177,6 +193,38 @@ bioc_packages <- c(
 message("Installing Bioconductor packages (this is the slow part)...")
 BiocManager::install(bioc_packages, update = FALSE, ask = FALSE)
 
+# Data-only Bioc packages (Illumina manifests/annos, sesameData, FDb...)
+# don't always ship a macOS binary on the Bioc mirror — particularly on a
+# freshly-released Bioc minor (e.g. 3.23) where binaries lag the source
+# release by days/weeks. The bulk install above silently skips them
+# because of our global `install.packages.compile.from.source = "never"`
+# setting (the macOS Tahoe SDK defense for *compiled* packages). For
+# pure-R/data packages there's nothing to compile, so source install is
+# safe and fast. Any missing one would otherwise cascade — e.g. missMethyl
+# fails to load when its 450k anno dep didn't land.
+data_only_pkgs <- c(
+  # conumee2 transitive (methylumi → FDb)
+  "FDb.InfiniumMethylation.hg19",
+  # Illumina manifests + annotations consumed by minfi/missMethyl/sesame
+  "IlluminaHumanMethylation450kmanifest",
+  "IlluminaHumanMethylation450kanno.ilmn12.hg19",
+  "IlluminaHumanMethylationEPICmanifest",
+  "IlluminaHumanMethylationEPICanno.ilm10b4.hg19",
+  "IlluminaHumanMethylationEPICv2manifest",
+  "IlluminaHumanMethylationEPICv2anno.20a1.hg38",
+  # sesame's ExperimentHub-fed data companion
+  "sesameData"
+)
+data_only_missing <- data_only_pkgs[
+  !vapply(data_only_pkgs, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(data_only_missing) > 0) {
+  message("Installing data-only Bioc packages from source: ",
+          paste(data_only_missing, collapse = ", "))
+  BiocManager::install(data_only_missing, update = FALSE, ask = FALSE,
+                       type = "source")
+}
+
 # conumee2: not in every Bioc release. Try Bioc first, fall back to GitHub.
 # The GitHub repo hosts the package inside a `conumee2/` subdirectory, so
 # we use devtools::install_github(subdir=) rather than renv::install(), which
@@ -197,10 +245,10 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
     message("conumee2 not in Bioc ", bioc_label,
             "; installing from GitHub (hovestadtlab/conumee2, subdir=conumee2)...")
     # devtools is in the CRAN list above; this is a belt-and-suspenders
-    # install in case the CRAN step skipped it for any reason.
+    # install in case the CRAN step skipped it for any reason. Same
+    # PPM-then-CRAN fallback chain as the bulk install.
     if (!requireNamespace("devtools", quietly = TRUE)) {
-      install.packages("devtools", type = "binary",
-                       repos = "https://packagemanager.posit.co/cran/latest")
+      install.packages("devtools", type = "binary", repos = .cran_repos)
     }
     devtools::install_github("hovestadtlab/conumee2",
                              subdir = "conumee2",
@@ -254,6 +302,7 @@ required_pkgs <- c(
   # Bioc core
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
   "DMRcate", "GenomicRanges", "sesame", "sesameData", "Gviz",
+  "methylumi", "FDb.InfiniumMethylation.hg19",
   "conumee2",
   # Bioc Illumina manifests + annotations. Listed in bioc_packages above
   # but BiocManager has been observed to silently skip individual data
