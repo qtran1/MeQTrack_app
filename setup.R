@@ -251,9 +251,21 @@ required_pkgs <- c(
   "stringr", "shiny", "bslib", "shinyFiles", "shinycssloaders",
   "promises", "future", "callr", "ggdendro", "jsonlite", "yaml",
   "DT", "ggrepel", "RColorBrewer", "rmarkdown", "knitr",
-  # Bioc
-  "minfi", "limma", "missMethyl", "matrixStats", "DMRcate", "sesame",
-  "sesameData", "conumee2",
+  # Bioc core
+  "minfi", "limma", "missMethyl", "matrixStats", "snifter",
+  "DMRcate", "GenomicRanges", "sesame", "sesameData", "Gviz",
+  "conumee2",
+  # Bioc Illumina manifests + annotations. Listed in bioc_packages above
+  # but BiocManager has been observed to silently skip individual data
+  # packages (e.g. EPICv2anno.20a1.hg38) when their binary isn't
+  # available; missMethyl then fails at runtime with
+  # "package <X> required by missMethyl could not be found".
+  "IlluminaHumanMethylation450kmanifest",
+  "IlluminaHumanMethylation450kanno.ilmn12.hg19",
+  "IlluminaHumanMethylationEPICmanifest",
+  "IlluminaHumanMethylationEPICanno.ilm10b4.hg19",
+  "IlluminaHumanMethylationEPICv2manifest",
+  "IlluminaHumanMethylationEPICv2anno.20a1.hg38",
   # Local tarball
   "yamapData"
 )
