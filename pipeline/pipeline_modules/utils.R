@@ -187,13 +187,15 @@ install_dependencies <- function(quiet = FALSE) {
     "DT", "parallel", "yaml", "ggrepel"
   )
   
-  # Bioconductor packages
+  # Bioconductor packages.
+  # Note: the CNV backend uses `conumee2`, not the older `conumee` package.
+  # conumee2 is handled by the project's setup.R (Bioc with GitHub fallback)
+  # and is intentionally not listed here.
   bioc_packages <- c(
     "minfi", "limma", "missMethyl", "RColorBrewer", "matrixStats", "snifter",
-    "DMRcate", "conumee", "GenomicRanges", "IlluminaHumanMethylation450kanno.ilmn12.hg19",
+    "DMRcate", "GenomicRanges", "IlluminaHumanMethylation450kanno.ilmn12.hg19",
     "IlluminaHumanMethylationEPICanno.ilm10b4.hg19", "IlluminaHumanMethylationEPICv2manifest",
-    "IlluminaHumanMethylationEPICv2anno.20a1.hg38", "sesame", "Gviz", "RColorBrewer"
-    
+    "IlluminaHumanMethylationEPICv2anno.20a1.hg38", "sesame", "Gviz"
   )
   
   # Install dependencies
