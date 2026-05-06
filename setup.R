@@ -122,8 +122,11 @@ cran_packages <- c(
   "shiny", "bslib", "shinyFiles", "shinycssloaders",
   "promises", "future", "callr",
   "ggdendro", "jsonlite",
-  # Needed for the conumee2 GitHub fallback (supports `subdir = ...`)
-  "remotes"
+  # Needed for the conumee2 GitHub install (supports `subdir = ...`).
+  # We use devtools to match the install incantation that's been verified
+  # to work on the target laptops:
+  #   devtools::install_github("hovestadtlab/conumee2", subdir = "conumee2")
+  "devtools"
 )
 
 message("Installing CRAN packages (may take a while on first run)...")
@@ -138,9 +141,8 @@ install.packages(cran_packages, type = "binary",
 # ---------------------------------------------------------------------------
 # 4. Bioconductor dependencies
 # ---------------------------------------------------------------------------
-# NOTE: pipeline's install_dependencies() lists `conumee`; the code uses
-# `conumee2`. conumee2 is not in every Bioc release — we handle it
-# separately below with a GitHub fallback.
+# NOTE: conumee2 is not in every Bioc release, so we handle it separately
+# below with a GitHub fallback rather than including it in this list.
 bioc_packages <- c(
   # core analysis
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
@@ -168,10 +170,11 @@ bioc_packages <- c(
 message("Installing Bioconductor packages (this is the slow part)...")
 BiocManager::install(bioc_packages, update = FALSE, ask = FALSE)
 
-# conumee2: not in Bioc 3.21. Try Bioc first, fall back to GitHub.
+# conumee2: not in every Bioc release. Try Bioc first, fall back to GitHub.
 # The GitHub repo hosts the package inside a `conumee2/` subdirectory, so
-# we use remotes::install_github(subdir=) rather than renv::install(), which
-# would look for DESCRIPTION at the repo root and fail.
+# we use devtools::install_github(subdir=) rather than renv::install(), which
+# would look for DESCRIPTION at the repo root and fail. devtools is the
+# install path that's been verified to work on the target laptops.
 if (!requireNamespace("conumee2", quietly = TRUE)) {
   message("Installing conumee2 (Bioc first, GitHub fallback)...")
   bioc_ok <- tryCatch({
@@ -186,13 +189,28 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
     )
     message("conumee2 not in Bioc ", bioc_label,
             "; installing from GitHub (hovestadtlab/conumee2, subdir=conumee2)...")
-    if (!requireNamespace("remotes", quietly = TRUE)) {
-      install.packages("remotes", type = "binary",
-                       repos = "https://cran.r-project.org")
+    # devtools is in the CRAN list above; this is a belt-and-suspenders
+    # install in case the CRAN step skipped it for any reason.
+    if (!requireNamespace("devtools", quietly = TRUE)) {
+      install.packages("devtools", type = "binary",
+                       repos = "https://packagemanager.posit.co/cran/latest")
     }
-    remotes::install_github("hovestadtlab/conumee2",
-                            subdir = "conumee2",
-                            upgrade = "never")
+    devtools::install_github("hovestadtlab/conumee2",
+                             subdir = "conumee2",
+                             upgrade = "never")
+    # devtools::install_github can warn and return without actually installing
+    # (e.g. when the host has no git, the GitHub API rate-limits, or the
+    # tarball download fails partway). Verify the install landed; the final
+    # post-install check at the end of setup.R catches this too, but failing
+    # here gives a more localised error.
+    if (!requireNamespace("conumee2", quietly = TRUE)) {
+      stop(
+        "conumee2 GitHub fallback did not deliver the package to the renv ",
+        "library. Check the messages above for the underlying devtools/git ",
+        "error (no network, missing git, GitHub rate limit, etc.) and re-run ",
+        "setup.R after fixing it."
+      )
+    }
   }
 }
 
@@ -210,7 +228,44 @@ if (!requireNamespace("yamapData", quietly = TRUE)) {
 }
 
 # ---------------------------------------------------------------------------
-# 6. Snapshot lockfile
+# 6. Verify every required package can actually be loaded.
+# ---------------------------------------------------------------------------
+# Several install paths above can succeed silently without delivering the
+# package into the renv project library — most notably the conumee2 GitHub
+# fallback (remotes::install_github can warn-and-bail without raising an
+# error) and any Bioc install where the requested package isn't in the
+# current Bioc release for the running R. If we let setup.R "complete" in
+# that state, the user only finds out later when the pipeline crashes at
+# `library(...)` time. Probe every package the pipeline attaches and stop
+# loudly here instead.
+required_pkgs <- c(
+  # CRAN
+  "data.table", "ggplot2", "plotly", "Rtsne", "umap", "dendextend",
+  "stringr", "shiny", "bslib", "shinyFiles", "shinycssloaders",
+  "promises", "future", "callr", "ggdendro", "jsonlite", "yaml",
+  "DT", "ggrepel", "RColorBrewer", "rmarkdown", "knitr",
+  # Bioc
+  "minfi", "limma", "missMethyl", "matrixStats", "DMRcate", "sesame",
+  "conumee2",
+  # Local tarball
+  "yamapData"
+)
+missing_pkgs <- required_pkgs[!vapply(required_pkgs, requireNamespace,
+                                      logical(1), quietly = TRUE)]
+if (length(missing_pkgs) > 0) {
+  stop(
+    "setup.R finished its install steps but the following packages are still ",
+    "not loadable from the renv project library:\n  ",
+    paste(missing_pkgs, collapse = ", "),
+    "\n\nThis usually means an install warned-and-bailed without raising an ",
+    "error (e.g. conumee2 from GitHub on a host without git/network access). ",
+    "Re-run setup.R after fixing the underlying issue; the messages above ",
+    "should point at the failing package."
+  )
+}
+
+# ---------------------------------------------------------------------------
+# 7. Snapshot lockfile
 # ---------------------------------------------------------------------------
 message("Writing renv.lock...")
 # type = "implicit" scans only packages actually referenced by project R

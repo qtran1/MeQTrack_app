@@ -60,7 +60,12 @@ opt <- parse_args(opt_parser)
 
 
 
-# Load necessary libraries
+# Load necessary libraries.
+# conumee2 + yamapData are attached lazily inside run_conumee_cnv() (in
+# pipeline_modules/cnv_analysis.R) — only the CNV step needs them, and
+# attaching them here would make non-CNV steps (preprocess/QC/dim-reduction)
+# fail to start when conumee2 isn't installed. The CNV step still hard-fails
+# loudly via its own requireNamespace check.
 suppressPackageStartupMessages({
   library(data.table)
   library(limma)
@@ -76,9 +81,7 @@ suppressPackageStartupMessages({
   library(umap)
   library(dendextend)
   library(parallel)
-  library(conumee2)
   library(sesame)
-  library(yamapData)
 })
 
 # Set working directory to the script's location so relative paths work

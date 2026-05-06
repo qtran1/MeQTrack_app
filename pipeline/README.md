@@ -157,9 +157,9 @@ The declared dependency set is heavy.
 
 **CRAN:** `optparse, data.table, ggplot2, plotly, Rtsne, umap, dendextend, circlize, htmlwidgets, rmarkdown, knitr, DT, parallel, yaml, ggrepel`.
 
-**Bioconductor:** `minfi, limma, missMethyl, RColorBrewer, matrixStats, snifter, DMRcate, conumee` (the main pipeline actually uses `conumee2` — note the mismatch with `install_dependencies()` which installs plain `conumee`), `GenomicRanges, IlluminaHumanMethylation450kanno.ilmn12.hg19, IlluminaHumanMethylationEPICanno.ilm10b4.hg19, IlluminaHumanMethylationEPICv2manifest, IlluminaHumanMethylationEPICv2anno.20a1.hg38, sesame, Gviz`.
+**Bioconductor:** `minfi, limma, missMethyl, RColorBrewer, matrixStats, snifter, DMRcate, conumee2, GenomicRanges, IlluminaHumanMethylation450kanno.ilmn12.hg19, IlluminaHumanMethylationEPICanno.ilm10b4.hg19, IlluminaHumanMethylationEPICv2manifest, IlluminaHumanMethylationEPICv2anno.20a1.hg38, sesame, Gviz`. `conumee2` is provisioned by the top-level `setup.R` (Bioc first, GitHub fallback) — `install_dependencies()` here does not include it.
 
-**Local source tarball:** `yamapData` from `data/yamapData_0.0.3.tar.gz` (not currently copied into this folder — conumee's internal reference panel depends on it).
+**Local source tarball:** `yamapData` from `data/yamapData_0.0.3.tar.gz` (not currently copied into this folder — `conumee2`'s internal reference panel depends on it).
 
 **External tools:** `pandoc` is needed for HTML report rendering; without it the pipeline falls back to a plain-text report.
 
@@ -169,8 +169,6 @@ A few things noticed while reading that the MVP effort should address.
 
 The filtering module calls `rmSNPandCH` only via commented-out lines — the flags `remove_snps` and `remove_cross_reactive` in the API don't actually branch any behavior; all "real" SNP/cross-reactive removal is baked into the curated keep-list files, so those CLI options are effectively no-ops today.
 
-The `install_dependencies()` helper lists `conumee` but the pipeline sources `conumee2`; a fresh environment needs `conumee2` installed explicitly.
-
 `select_variable_probes` is defined in both `filtering.R` and `dim_reduction.R` — whichever is sourced last wins; it happens to be `dim_reduction.R`, and the two implementations differ (the `filtering.R` version also supports `iqr`).
 
-The 257 MB `yamapData_0.0.3.tar.gz` was intentionally not copied from the source repo and still needs to land in `data/` before the pipeline can run end-to-end, since conumee's internal reference panel depends on it.
+The 257 MB `yamapData_0.0.3.tar.gz` was intentionally not copied from the source repo and still needs to land in `data/` before the pipeline can run end-to-end, since `conumee2`'s internal reference panel depends on it.

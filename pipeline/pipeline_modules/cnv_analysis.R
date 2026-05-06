@@ -117,10 +117,24 @@ run_cnv_analysis <- function(rgset, sample_info,
 #' @return List containing CNV results
 run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, threads, array_type = "EPICv2") {
 
-  # Check if conumee2 is available
-  if (!requireNamespace("conumee2", quietly = TRUE)) {
-    stop("Package 'conumee2' is required for conumee CNV analysis")
+  # conumee2 + yamapData are attached here (not at the top of
+  # methylation_pipeline.R) so non-CNV steps stay runnable when these
+  # packages are missing. Both are required for this step — fail loudly
+  # with a message that points the user at setup.R rather than letting
+  # `library()` raise the bare "no package called X" error.
+  for (pkg in c("conumee2", "yamapData")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(
+        "Package '", pkg, "' is required for conumee CNV analysis but is ",
+        "not installed.\n  Re-run setup.R from the project root to provision ",
+        "the R library:\n    Rscript setup.R"
+      )
+    }
   }
+  suppressPackageStartupMessages({
+    library(conumee2)
+    library(yamapData)
+  })
 
   # Normalize array_type to conumee2-accepted values (case-sensitive: 450k, EPIC, EPICv2, mouse)
   array_type <- switch(toupper(array_type),
