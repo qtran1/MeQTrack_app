@@ -106,11 +106,17 @@ default_config <- function() {
       )
     ),
 
-    # CNV analysis
+    # CNV analysis. Asymmetric gain/loss thresholds:
+    # a segment is called a gain when seg.mean > gain_threshold and a loss
+    # when seg.mean < loss_threshold. The legacy single `threshold` key is
+    # still honoured (treated as |threshold|, applied symmetrically) for
+    # backward compatibility with run_manifest.json files written by older
+    # versions of MeQTrack.
     cnv = list(
-      method         = "conumee",   # Options: conumee, ChAMP, cnAnalysis450k
-      threshold      = 0.18,
-      frequency_plot = TRUE
+      method          = "conumee",   # Options: conumee, ChAMP, cnAnalysis450k
+      gain_threshold  =  0.18,
+      loss_threshold  = -0.20,
+      frequency_plot  = TRUE
     ),
 
     # Output

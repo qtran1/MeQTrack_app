@@ -136,7 +136,8 @@ help_module_ui <- function(id) {
           shiny::tags$td(shiny::tags$strong("4. Copy-number variation")),
           shiny::tags$td(
             "Per-sample CNV via conumee2, segment calls (.seg), genome-wide ",
-            "frequency plot at threshold 0.18."
+            "frequency plot. Gain and loss are called against separate ",
+            "thresholds (defaults: gain > 0.18, loss < -0.20)."
           )
         ),
         shiny::tags$tr(
@@ -220,9 +221,11 @@ help_module_ui <- function(id) {
         "cohorts often need 2–3."),
       shiny::tags$li(shiny::tags$strong("UMAP neighbors"),
         " (default 15) — local-vs-global trade-off."),
-      shiny::tags$li(shiny::tags$strong("CNV call threshold"),
-        " (default 0.18) — absolute seg.mean cutoff for calling gains/losses ",
-        "in the CNV frequency plot. Lower = more sensitive.")
+      shiny::tags$li(shiny::tags$strong("CNV gain threshold"),
+        " (default 0.18) — seg.mean cutoff above which a segment is called a gain."),
+      shiny::tags$li(shiny::tags$strong("CNV loss threshold"),
+        " (default -0.20) — seg.mean cutoff below which a segment is called a loss; ",
+        "enter as a negative value.")
     ),
 
     shiny::hr(),

@@ -222,6 +222,15 @@ bridge_kill <- function(handle) {
   if (!is.null(parameters$dim.umap_n_neighbors)) {
     cfg$dim_reduction$umap$n_neighbors <- parameters$dim.umap_n_neighbors
   }
+  if (!is.null(parameters$cnv.gain_threshold)) {
+    cfg$cnv$gain_threshold <- parameters$cnv.gain_threshold
+  }
+  if (!is.null(parameters$cnv.loss_threshold)) {
+    cfg$cnv$loss_threshold <- parameters$cnv.loss_threshold
+  }
+  # Back-compat: a legacy single `cnv.threshold` still flows through
+  # untouched. The pipeline applies it symmetrically when neither
+  # gain_threshold nor loss_threshold is set.
   if (!is.null(parameters$cnv.threshold)) {
     cfg$cnv$threshold <- parameters$cnv.threshold
   }

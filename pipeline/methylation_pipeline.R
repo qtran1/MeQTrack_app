@@ -572,17 +572,28 @@ run_pipeline <- function(step) {
       }
     }
     
-    # Get CNV parameters
-    cnv_method <- "conumee"  # Default value
-    cnv_threshold <- 0.18  # Default value
-    cnv_frequency_plot <- TRUE  # Default value
-    
+    # Get CNV parameters. Asymmetric gain/loss thresholds; a legacy
+    # `threshold` key (older run_manifest.json files) still works and is
+    # applied symmetrically as ±abs(threshold).
+    cnv_method <- "conumee"
+    cnv_gain_threshold <-  0.18
+    cnv_loss_threshold <- -0.20
+    cnv_frequency_plot <- TRUE
+
     if (!is.null(config$cnv)) {
       if (!is.null(config$cnv$method)) {
         cnv_method <- config$cnv$method
       }
+      # Legacy single threshold (back-compat) — overridden by gain/loss below.
       if (!is.null(config$cnv$threshold)) {
-        cnv_threshold <- config$cnv$threshold
+        cnv_gain_threshold <-  abs(config$cnv$threshold)
+        cnv_loss_threshold <- -abs(config$cnv$threshold)
+      }
+      if (!is.null(config$cnv$gain_threshold)) {
+        cnv_gain_threshold <- abs(config$cnv$gain_threshold)
+      }
+      if (!is.null(config$cnv$loss_threshold)) {
+        cnv_loss_threshold <- -abs(config$cnv$loss_threshold)
       }
       if (!is.null(config$cnv$frequency_plot)) {
         cnv_frequency_plot <- config$cnv$frequency_plot
@@ -608,14 +619,17 @@ run_pipeline <- function(step) {
       array_type = array_type,
       output_dir = dirs$cnv,
       plots_dir  = dirs$figures_cnv,
-      threads = opt$threads
+      threads = opt$threads,
+      gain_threshold = cnv_gain_threshold,
+      loss_threshold = cnv_loss_threshold
     )
 
     # Generate frequency plot
     if (cnv_frequency_plot) {
       frequency_plot_path <- generate_cnv_frequency_plot(
         cnv_results$segments,
-        threshold = cnv_threshold,
+        gain_threshold = cnv_gain_threshold,
+        loss_threshold = cnv_loss_threshold,
         output_dir = dirs$figures_cnv
       )
       # Add frequency plot path to CNV results
