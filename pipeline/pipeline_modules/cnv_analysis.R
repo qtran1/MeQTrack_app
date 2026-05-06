@@ -78,6 +78,9 @@ fix_column_names <- function(col_names) {
 #' @param plots_dir  Output directory for CNV plots. Defaults to
 #'                   \code{file.path(output_dir, "plots")} for backward compat.
 #' @param threads Number of CPU threads to use
+#' @param gain_threshold seg.mean cutoff above which a segment is called a gain
+#' @param loss_threshold seg.mean cutoff below which a segment is called a loss
+#'                       (signed; e.g. -0.2)
 #' @return List containing CNV results
 run_cnv_analysis <- function(rgset, sample_info,
                            references = NULL,
@@ -85,18 +88,27 @@ run_cnv_analysis <- function(rgset, sample_info,
                            array_type = "EPICv2",
                            output_dir = ".",
                            plots_dir  = NULL,
-                           threads = 4) {
+                           threads = 4,
+                           gain_threshold =  0.18,
+                           loss_threshold = -0.20) {
 
   message(paste("Running CNV analysis using", method, "method..."))
+
+  # Normalise signs so callers can pass either form.
+  gain_threshold <-  abs(gain_threshold)
+  loss_threshold <- -abs(loss_threshold)
 
   if (is.null(plots_dir)) plots_dir <- file.path(output_dir, "plots")
   cnv_seg_dir <- file.path(output_dir, "segments")
   dir.create(plots_dir,   showWarnings = FALSE, recursive = TRUE)
   dir.create(cnv_seg_dir, showWarnings = FALSE, recursive = TRUE)
-  
+
   # Select method
   if (method == "conumee") {
-    result <- run_conumee_cnv(rgset, sample_info, references, plots_dir, cnv_seg_dir, threads, array_type)
+    result <- run_conumee_cnv(rgset, sample_info, references, plots_dir, cnv_seg_dir,
+                              threads, array_type,
+                              gain_threshold = gain_threshold,
+                              loss_threshold = loss_threshold)
   } else if (method == "ChAMP") {
     result <- run_champ_cnv(rgset, sample_info, references, plots_dir, cnv_seg_dir, threads, array_type)
   } else {
@@ -115,7 +127,10 @@ run_cnv_analysis <- function(rgset, sample_info,
 #' @param seg_dir Output directory for CNV segment files
 #' @param threads Number of CPU threads to use
 #' @return List containing CNV results
-run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, threads, array_type = "EPICv2") {
+run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
+                            threads, array_type = "EPICv2",
+                            gain_threshold =  0.18,
+                            loss_threshold = -0.20) {
 
   # conumee2 + yamapData are attached here (not at the top of
   # methylation_pipeline.R) so non-CNV steps stay runnable when these
@@ -222,7 +237,9 @@ run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, 
   # Use serial processing to avoid rgset serialization issues
   message("Processing samples in serial mode to avoid serialization issues...")
   results <- lapply(seq_len(n_samples), function(i) {
-    process_conumee_sample(rgset, sample_ids[i], ref_controls, anno, plots_dir, seg_dir)
+    process_conumee_sample(rgset, sample_ids[i], ref_controls, anno, plots_dir, seg_dir,
+                           gain_threshold = gain_threshold,
+                           loss_threshold = loss_threshold)
   })
   
   # Combine segment files for IGV
@@ -335,7 +352,9 @@ run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, 
 #' @param plots_dir Output directory for CNV plots
 #' @param seg_dir Output directory for CNV segment files
 #' @return List containing sample CNV results
-process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_dir, seg_dir) {
+process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_dir, seg_dir,
+                                   gain_threshold =  0.18,
+                                   loss_threshold = -0.20) {
   message(paste("Processing sample:", sample_id))
   
   # Extract clean sample ID for file naming and output
@@ -459,8 +478,9 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
     cols = c("#018571", "#80cdc1", "#f5f5f5", "#dfc27d", "#a6611a")
   )
   # Gain/loss threshold lines: neutral grey so they don't clash with the
-  # new teal/brown palette.
-  abline(h = c(-0.2, 0.2), lty = 2, col = "grey50")
+  # new teal/brown palette. Asymmetric — gain at +gain_threshold,
+  # loss at loss_threshold (already signed negative).
+  abline(h = c(loss_threshold, gain_threshold), lty = 2, col = "grey50")
   dev.off()
   
   # Save segment results
@@ -573,10 +593,29 @@ run_champ_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, th
 #' Generate CNV frequency plot
 #'
 #' @param segments Data frame with CNV segments
-#' @param threshold Threshold for calling gains/losses
+#' @param gain_threshold seg.mean cutoff above which a segment counts as a gain
+#' @param loss_threshold seg.mean cutoff below which a segment counts as a loss
+#'                       (signed; e.g. -0.2)
+#' @param threshold Deprecated. Legacy single absolute cutoff applied
+#'                  symmetrically; if supplied, overrides gain/loss defaults
+#'                  with ±abs(threshold). Kept for back-compat with callers
+#'                  that haven't been updated yet.
 #' @param output_dir Output directory for plots
 #' @return Path to frequency plot
-generate_cnv_frequency_plot <- function(segments, threshold = 0.18, output_dir = ".") {
+generate_cnv_frequency_plot <- function(segments,
+                                        gain_threshold =  0.18,
+                                        loss_threshold = -0.20,
+                                        threshold = NULL,
+                                        output_dir = ".") {
+
+  # Back-compat: if a caller passed the old single threshold, apply it
+  # symmetrically and ignore the gain/loss defaults.
+  if (!is.null(threshold)) {
+    gain_threshold <-  abs(threshold)
+    loss_threshold <- -abs(threshold)
+  }
+  gain_threshold <-  abs(gain_threshold)
+  loss_threshold <- -abs(loss_threshold)
   
   message("Generating CNV frequency plot...")
   
@@ -629,7 +668,10 @@ generate_cnv_frequency_plot <- function(segments, threshold = 0.18, output_dir =
   pdf(pdf_path, width = 12, height = 5)
   
   # Call the freqplot function
-  freqplot(segments, threshold = threshold, plot.title = "CNV Frequency Plot")
+  freqplot(segments,
+           gain_threshold = gain_threshold,
+           loss_threshold = loss_threshold,
+           plot.title = "CNV Frequency Plot")
   
   dev.off()
   
@@ -641,10 +683,19 @@ generate_cnv_frequency_plot <- function(segments, threshold = 0.18, output_dir =
 #' This function sources the freqplot functions from the provided code
 source_freqplot_functions <- function() {
   
-  # Define the freqplot function and assign to global environment
-  freqplot <<- function(segs.data, threshold=0.18, plot.title="Copy Number Frequency") {
+  # Define the freqplot function and assign to global environment.
+  # gain_threshold / loss_threshold are asymmetric: a segment is a gain iff
+  # its seg.mean is strictly greater than gain_threshold, and a loss iff
+  # strictly less than loss_threshold (loss_threshold is signed negative).
+  freqplot <<- function(segs.data,
+                        gain_threshold =  0.18,
+                        loss_threshold = -0.20,
+                        plot.title = "Copy Number Frequency") {
+    gain_threshold <-  abs(gain_threshold)
+    loss_threshold <- -abs(loss_threshold)
+
     segs.mtx <- segs.as.mtx(segs.data, anns=NULL)
-    
+
     mean.pos.col <- which(colnames(segs.mtx) == "mean.pos")
     X <- as.matrix(segs.mtx[, -(1:mean.pos.col)])
     n.ints <- nrow(segs.mtx)
@@ -653,22 +704,19 @@ source_freqplot_functions <- function() {
     g.start <- c(0, cumsum(int.size[-n.ints]))
     g.end <- cumsum(int.size)
     n.subj <- ncol(X)
-    
+
     chr.num <- cumsum(c(1, segs.mtx$chrom[-1] != segs.mtx$chrom[-n.ints]))
     bg.col <- c("lightgray", "white")[chr.num %% 2 + 1]
-    
+
     nloss <- rep(0, n.ints)
     ngain <- rep(0, n.ints)
-    
+
     for(i in 1:n.subj) {
       seg.col <- bg.col
-      seg.call <- sign(X[, i]) * (abs(X[, i]) > abs(threshold))
-      seg.call[is.na(seg.call)] <- 0
-      
-      seg.loss <- (seg.call < 0)
+      vals <- X[, i]
+      seg.gain <- !is.na(vals) & vals > gain_threshold
+      seg.loss <- !is.na(vals) & vals < loss_threshold
       nloss <- nloss + seg.loss
-      
-      seg.gain <- (seg.call > 0)
       ngain <- ngain + seg.gain
     }
     

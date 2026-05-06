@@ -22,7 +22,8 @@ SETTINGS_DEFAULTS <- list(
   dim_variable_probes     = 10000L,
   dim_tsne_perplexity     = 5L,
   dim_umap_neighbors      = 15L,
-  cnv_threshold           = 0.18
+  cnv_gain_threshold      =  0.18,
+  cnv_loss_threshold      = -0.20
 )
 
 # Build the "<name> [?] (default X)" label for a numeric input. The info
@@ -127,17 +128,28 @@ settings_module_ui <- function(id) {
         shiny::h6(class = "text-muted text-uppercase small fw-semibold",
                   "Copy-number variation"),
         shiny::numericInput(
-          ns("cnv_threshold"),
+          ns("cnv_gain_threshold"),
           .settings_label(
-            "CNV call threshold", d$cnv_threshold,
+            "CNV gain threshold", d$cnv_gain_threshold,
             paste(
-              "Absolute seg.mean cutoff for calling a segment as a gain",
-              "or loss. Segments with |seg.mean| ≥ this are flagged in",
-              "the frequency plot and the segment heatmap. Lower values",
-              "= more sensitive (more calls); 0.18 is the conumee default."
+              "seg.mean cutoff above which a segment is called a gain",
+              "(seg.mean > this). 0.18 is the conumee default. Lower",
+              "values = more sensitive."
             )
           ),
-          value = d$cnv_threshold, min = 0, max = 1, step = 0.01
+          value = d$cnv_gain_threshold, min = 0, max = 1, step = 0.01
+        ),
+        shiny::numericInput(
+          ns("cnv_loss_threshold"),
+          .settings_label(
+            "CNV loss threshold", d$cnv_loss_threshold,
+            paste(
+              "seg.mean cutoff below which a segment is called a loss",
+              "(seg.mean < this). Enter as a negative value, e.g. -0.2.",
+              "Higher (closer to 0) = more sensitive."
+            )
+          ),
+          value = d$cnv_loss_threshold, min = -1, max = 0, step = 0.01
         )
       )
     ),
@@ -186,8 +198,10 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
           input$dim_tsne_perplexity, SETTINGS_DEFAULTS$dim_tsne_perplexity),
         dim.umap_n_neighbors              = integer_or_default(
           input$dim_umap_neighbors, SETTINGS_DEFAULTS$dim_umap_neighbors),
-        cnv.threshold                     = numeric_or_default(
-          input$cnv_threshold, SETTINGS_DEFAULTS$cnv_threshold)
+        cnv.gain_threshold                = numeric_or_default(
+          input$cnv_gain_threshold, SETTINGS_DEFAULTS$cnv_gain_threshold),
+        cnv.loss_threshold                = numeric_or_default(
+          input$cnv_loss_threshold, SETTINGS_DEFAULTS$cnv_loss_threshold)
       )
     })
   })
@@ -219,14 +233,24 @@ read_run_parameters <- function(run_dir) {
 }
 
 # Update the input widgets from a saved parameters block.
+# CNV thresholds: prefer the new gain/loss keys, but fall back to the
+# legacy single `cnv.threshold` (older run_manifest.json files) by
+# applying it symmetrically as ±abs(threshold).
 apply_params_to_inputs <- function(session, params) {
+  legacy_cnv <- params$cnv.threshold
+  cnv_gain <- params$cnv.gain_threshold
+  if (is.null(cnv_gain) && !is.null(legacy_cnv)) cnv_gain <-  abs(legacy_cnv)
+  cnv_loss <- params$cnv.loss_threshold
+  if (is.null(cnv_loss) && !is.null(legacy_cnv)) cnv_loss <- -abs(legacy_cnv)
+
   pairs <- list(
     qc_detection_p      = params$qc.detection_p_threshold,
     qc_failed_pct       = params$qc.failed_probe_percent_threshold,
     dim_variable_probes = params$dim.variable_probes,
     dim_tsne_perplexity = params$dim.tsne_perplexity,
     dim_umap_neighbors  = params$dim.umap_n_neighbors,
-    cnv_threshold       = params$cnv.threshold
+    cnv_gain_threshold  = cnv_gain,
+    cnv_loss_threshold  = cnv_loss
   )
   for (input_id in names(pairs)) {
     v <- pairs[[input_id]]
