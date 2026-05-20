@@ -1,5 +1,7 @@
 # macOS
 .DS_Store
+# Finder text-clipping artifacts (created by dragging selected text to Finder).
+*.textClipping
 
 # R
 .Rhistory
