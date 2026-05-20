@@ -471,7 +471,7 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   # dark teal → light teal → neutral grey → light brown → dark brown.
   # Matches the CNV heatmap's teal/brown diverging scheme.
   pdf_file <- file.path(plots_dir, paste0(clean_sample_id, "_cnv_profile.pdf"))
-  pdf(pdf_file)
+  pdf(pdf_file, width = 10, height = 5)
   CNV.genomeplot(
     cnv_segment,
     main = clean_sample_id,
