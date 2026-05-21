@@ -99,7 +99,7 @@ help_module_ui <- function(id) {
     shiny::hr(),
 
     # --- Pipeline stages -----------------------------------------------
-    shiny::h3("The 5 pipeline stages"),
+    shiny::h3("The 6 pipeline stages"),
     shiny::tags$table(
       class = "table table-sm table-borderless",
       shiny::tags$thead(
@@ -133,7 +133,14 @@ help_module_ui <- function(id) {
           )
         ),
         shiny::tags$tr(
-          shiny::tags$td(shiny::tags$strong("4. Copy-number variation")),
+          shiny::tags$td(shiny::tags$strong("4. Reference projection")),
+          shiny::tags$td(
+            "Projects your samples onto the bundled COMET reference t-SNE ",
+            "embedding and assigns each a nearest reference tumour group."
+          )
+        ),
+        shiny::tags$tr(
+          shiny::tags$td(shiny::tags$strong("5. Copy-number variation")),
           shiny::tags$td(
             "Per-sample CNV via conumee2, segment calls (.seg), genome-wide ",
             "frequency plot. Gain and loss are called against separate ",
@@ -141,7 +148,7 @@ help_module_ui <- function(id) {
           )
         ),
         shiny::tags$tr(
-          shiny::tags$td(shiny::tags$strong("5. Report")),
+          shiny::tags$td(shiny::tags$strong("6. Report")),
           shiny::tags$td(
             "Self-contained HTML report stitching every result together. ",
             "Open it in any browser, share by email."
@@ -181,6 +188,35 @@ help_module_ui <- function(id) {
 
     shiny::hr(),
 
+    # --- Reference projection ------------------------------------------
+    shiny::h3("Reference projection"),
+    shiny::p(
+      "The ", shiny::tags$em("Reference projection"), " sub-tab (under ",
+      shiny::tags$em("Dim. reduction"), ") places your samples onto a ",
+      "pre-built reference cohort — the bundled COMET pediatric ",
+      "solid-tumour set (~1,900 labelled methylomes) — and reports, per ",
+      "sample, the nearest reference tumour group as a diagnostic hint."
+    ),
+    shiny::tags$ul(
+      shiny::tags$li(
+        "The scatter shows your samples as dark diamonds on the reference ",
+        "cloud; the table below lists every sample with its nearest class, ",
+        "confidence, and ambiguity / distance flags."
+      ),
+      shiny::tags$li(
+        "It runs as part of a full analysis, or on its own — the ",
+        shiny::tags$em("Reference projection"), " stage has its own Run ",
+        "button and needs only a samplesheet (no preprocessing first)."
+      ),
+      shiny::tags$li(
+        shiny::tags$strong("First run is slower."), " The projection uses ",
+        "a Python toolchain (openTSNE) that provisions a self-contained ",
+        "environment on first use — a one-time few-minute download."
+      )
+    ),
+
+    shiny::hr(),
+
     # --- Past runs -----------------------------------------------------
     shiny::h3("Past runs library"),
     shiny::p(
@@ -200,7 +236,7 @@ help_module_ui <- function(id) {
     # --- Settings ------------------------------------------------------
     shiny::h3("Settings (tunable parameters)"),
     shiny::p(
-      "Six knobs on the Run tab. Defaults match ",
+      "Eight knobs on the Run tab. Defaults match ",
       shiny::tags$code("pipeline_modules/config.R$default_config"),
       "; overrides apply to the next launch only and are persisted in the ",
       "run's ", shiny::tags$code("run_manifest.json"),
@@ -225,7 +261,13 @@ help_module_ui <- function(id) {
         " (default 0.18) — seg.mean cutoff above which a segment is called a gain."),
       shiny::tags$li(shiny::tags$strong("CNV loss threshold"),
         " (default -0.20) — seg.mean cutoff below which a segment is called a loss; ",
-        "enter as a negative value.")
+        "enter as a negative value."),
+      shiny::tags$li(shiny::tags$strong("Nearest-class k"),
+        " (default 25) — reference neighbours that vote on each projected ",
+        "sample's tumour class."),
+      shiny::tags$li(shiny::tags$strong("Projection perplexity"),
+        " (default 5) — neighbourhood size for placing your samples onto ",
+        "the reference embedding.")
     ),
 
     shiny::hr(),

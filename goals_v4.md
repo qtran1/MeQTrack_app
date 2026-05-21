@@ -151,7 +151,17 @@ reference. Deferred to v2.1.
   Projection" section with the Class Hints table and the projection
   plot (P3-T4 fully done).
 
-  **Still open:** Phase 4 (packaging, caching, release).
+- **Phase 4 — packaging done; release pending sign-off.**
+  `build_release.sh` now bundles `reference/` into the zip (the compact
+  `.rds` β-matrix + embeddings + metadata; the multi-hundred-MB source
+  CSVs excluded), with a preflight check mirroring yamapData's.
+  `MEQTRACK_VERSION` is bumped to `2.0.0`; the Help tab and QUICKSTART
+  document the feature. The release zip builds at ~560 MB / 93 files
+  with the reference assets verified inside.
+
+  **Remaining:** P4-GATE — a fresh-install smoke test on a clean
+  machine — then merge `v2.0.0-reference-projection` → `main` and tag
+  v2.0.0.
 
 ---
 
