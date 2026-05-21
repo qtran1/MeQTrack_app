@@ -145,7 +145,7 @@ preprocess_query_swan <- function(samplesheet) {
   suppressPackageStartupMessages(library(minfi))
 
   if (is.character(samplesheet) && length(samplesheet) == 1L && dir.exists(samplesheet)) {
-    rgset <- read.metharray.exp(base = samplesheet, force = TRUE)
+    rgset <- read.metharray.exp(base = samplesheet, recursive = TRUE, force = TRUE)
   } else {
     if (is.character(samplesheet)) {
       suppressPackageStartupMessages(library(data.table))
@@ -156,7 +156,7 @@ preprocess_query_swan <- function(samplesheet) {
     if (!"Basename" %in% colnames(ss)) {
       stop("Query samplesheet needs a 'Basename' column.")
     }
-    rgset <- read.metharray.exp(targets = ss, force = TRUE)
+    rgset <- read.metharray.exp(targets = ss, recursive = TRUE, force = TRUE)
   }
 
   message(sprintf("preprocess_query_swan: %d query sample(s); running SWAN ...",

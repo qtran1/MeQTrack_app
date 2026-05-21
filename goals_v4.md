@@ -95,14 +95,16 @@ reference. Deferred to v2.1.
 - **Phase 0** — mostly done. Reference assets staged in `reference/` and
   validated (alignment confirmed; COMET identified). Open: the β-matrix
   distribution decision (P0-T3) and the workspace cache layout (P0-T4).
-- **Phase 1** — projection proven for the 1915 COMET set.
-  `pipeline/pipeline_modules/reference_projection.R` is written and
-  tested end-to-end (example EPIC run: 4 samples, 100% probe match,
-  projected + plotted in ~60 s; basilisk Python env provisions on first
-  use). The `project_sample_onto_tSNEspace_app.R` prototype is
-  superseded. Remaining: **P1-T5** — wire the module into
-  `methylation_pipeline.R` as `--step reference_projection` and add
-  `config$reference_projection$*`.
+- **Phase 1 — COMPLETE.** `pipeline/pipeline_modules/reference_projection.R`
+  written and wired into `methylation_pipeline.R` as
+  `--step reference_projection`, with `config$reference_projection$*`
+  (enabled / dataset / reference_dir / perplexity) in `config.R`.
+  Verified end-to-end both standalone and through the pipeline driver
+  (example EPIC run: 4 samples, 100% probe match, ~60 s). Outputs land
+  in `<run>/reference_projection/`. The step is self-contained (reads
+  IDATs + SWAN itself) and tryCatch-wrapped so a failure doesn't abort
+  the run. The basilisk Python env provisions on first use.
+  **Next: P1-GATE** (user demo), then Phase 2 (nearest-class diagnostic).
 
 ---
 

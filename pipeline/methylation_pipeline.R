@@ -35,7 +35,7 @@ option_list <- list(
   make_option(c("-c", "--config"), type="character", default=NULL,
               help="Configuration file path", metavar="file"),
   make_option(c("-s", "--step"), type="character", default="all",
-              help="Pipeline step to run [all|preprocess|qc|dim_reduction|cnv|visualization]", 
+              help="Pipeline step to run [all|preprocess|qc|filtering|dim_reduction|reference_projection|cnv|visualization]",
               metavar="step"),
   make_option(c("-a", "--array_type"), type="character", default="auto",
               help="Array type [450k|EPIC|EPICv2|auto]", metavar="type"),
@@ -104,6 +104,7 @@ source("pipeline_modules/preprocess.R")
 source("pipeline_modules/qc.R")
 source("pipeline_modules/filtering.R")
 source("pipeline_modules/dim_reduction.R")
+source("pipeline_modules/reference_projection.R")
 source("pipeline_modules/cnv_analysis.R")
 source("pipeline_modules/visualization.R")
 source("pipeline_modules/hpc.R")
@@ -189,8 +190,10 @@ run_pipeline <- function(step) {
     # Save beta values as a flat file
     write_beta_values(beta_values, file.path(dirs$processed, "beta_values.txt"))
   } 
-  else {
-    # Load preprocessed data if not running preprocessing
+  else if (step != "reference_projection") {
+    # Load preprocessed data if not running preprocessing.
+    # The reference-projection step is self-contained — it reads IDATs and
+    # SWAN-normalises them itself — so it does not need preprocessed data.
     log_message("Loading preprocessed data...", log_file)
     data_file <- file.path(dirs$processed, "preprocessed_data.RData")
     if (!file.exists(data_file)) {
@@ -422,7 +425,7 @@ run_pipeline <- function(step) {
     write_beta_values(filtered_beta, file.path(dirs$processed, "filtered_beta_values.txt"))
     
     log_message(paste("Filtering complete. Kept", nrow(filtered_beta), "probes."), log_file)
-  } else if (step != "preprocess" && step != "qc") {
+  } else if (step != "preprocess" && step != "qc" && step != "reference_projection") {
     # Try to load filtered data if not running filtering
     log_message("Loading filtered beta values...", log_file)
     filtered_file <- file.path(dirs$processed, "filtered_beta_values.txt")
@@ -555,6 +558,69 @@ run_pipeline <- function(step) {
     save(dim_reduction_results, file = file.path(dirs$dim_reduction, "dim_reduction_results.RData"))
   }
   
+  if (step == "all" || step == "reference_projection") {
+    # No "Step N:" prefix — the run_controller's stage-progress parser does
+    # not yet know about this stage (UI integration is goals_v4 Phase 3).
+    # Until then it logs as a plain stage, like probe filtering.
+    log_message("Reference projection", log_file)
+
+    # Reference-projection parameters (config$reference_projection$*).
+    rp_enabled       <- TRUE
+    rp_dataset       <- "COMET_1915"
+    rp_reference_dir <- "../reference"
+    rp_perplexity    <- 5
+
+    if (!is.null(config$reference_projection)) {
+      if (!is.null(config$reference_projection$enabled))
+        rp_enabled <- config$reference_projection$enabled
+      if (!is.null(config$reference_projection$dataset))
+        rp_dataset <- config$reference_projection$dataset
+      if (!is.null(config$reference_projection$reference_dir))
+        rp_reference_dir <- config$reference_projection$reference_dir
+      if (!is.null(config$reference_projection$perplexity))
+        rp_perplexity <- config$reference_projection$perplexity
+    }
+
+    # cwd is the pipeline/ directory (set above), so a relative reference_dir
+    # such as "../reference" resolves to the repo-root reference/ folder.
+    rp_reference_dir <- normalizePath(rp_reference_dir, mustWork = FALSE)
+
+    if (!rp_enabled) {
+      log_message("Reference projection disabled in config — skipping.", log_file)
+    } else if (!dir.exists(rp_reference_dir)) {
+      log_message(paste("Reference data directory not found — skipping projection:",
+                        rp_reference_dir), log_file)
+    } else {
+      # Self-contained: run_reference_projection() reads the query IDATs and
+      # SWAN-normalises them itself (matching how the reference embedding was
+      # built), so it does not depend on the preprocess step's output.
+      # Wrapped in tryCatch so a projection failure (e.g. the reference beta
+      # matrix not yet downloaded) does not abort the rest of the pipeline.
+      rp_result <- tryCatch(
+        run_reference_projection(
+          samplesheet   = sample_sheet,
+          dataset       = rp_dataset,
+          reference_dir = rp_reference_dir,
+          output_dir    = dirs$reference_projection,
+          perplexity    = rp_perplexity
+        ),
+        error = function(e) {
+          log_message(paste("Reference projection failed:", conditionMessage(e)),
+                      log_file)
+          NULL
+        }
+      )
+      if (!is.null(rp_result)) {
+        save(rp_result,
+             file = file.path(dirs$reference_projection,
+                              "reference_projection_results.RData"))
+        log_message(sprintf(
+          "Reference projection complete: %d sample(s) projected onto '%s'.",
+          nrow(rp_result$projected), rp_dataset), log_file)
+      }
+    }
+  }
+
   if (step == "all" || step == "cnv") {
     log_message("Step 4: Copy number variation analysis", log_file)
     
