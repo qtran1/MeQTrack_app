@@ -3,7 +3,8 @@
 # Wave 6 Theme 6d Phase 1 — user-tunable pipeline parameters.
 #
 # Numeric knobs across QC, dimensionality reduction, CNV and reference
-# projection. The reactive
+# projection, plus the reference-dataset picker (which labelled cohort a
+# query is projected onto). The reactive
 # returned by settings_module_server() is consumed by run_controller, which
 # passes the values into bridge_launch on each run. Per the v1.1 decision,
 # these apply to the next launch only — there is no workspace-default
@@ -17,6 +18,9 @@
 # ---------------------------------------------------------------------------
 
 # Authoritative defaults — must match pipeline_modules/config.R$default_config.
+# All numeric except refproj_dataset (a reference-dataset key); the reset and
+# past-run-restore handlers branch on type so the selectInput is updated with
+# updateSelectInput rather than updateNumericInput.
 SETTINGS_DEFAULTS <- list(
   qc_detection_p          = 0.01,
   qc_failed_pct           = 25,
@@ -25,6 +29,7 @@ SETTINGS_DEFAULTS <- list(
   dim_umap_neighbors      = 15L,
   cnv_gain_threshold      =  0.18,
   cnv_loss_threshold      = -0.20,
+  refproj_dataset         = "COMET_1915",
   refproj_knn_k           = 25L,
   refproj_perplexity      = 5L
 )
@@ -159,6 +164,29 @@ settings_module_ui <- function(id) {
         class = "col-md-6",
         shiny::h6(class = "text-muted text-uppercase small fw-semibold",
                   "Reference projection"),
+        shiny::selectInput(
+          ns("refproj_dataset"),
+          # No "(default ...)" suffix here — the dataset keys are long; the
+          # tooltip carries the explanation instead.
+          shiny::tagList(
+            "Reference dataset", " ",
+            bslib::tooltip(
+              shiny::icon("circle-info", class = "text-muted",
+                          style = "cursor: help;"),
+              paste(
+                "Which labelled reference cohort your samples are projected",
+                "onto. Each dataset has its own t-SNE embedding, training",
+                "beta matrix and tumour-class labels — the projection and",
+                "the nearest-class hints are computed against the one",
+                "picked here. COMET is a paediatric solid-tumour set;",
+                "Capper is the CNS-tumour reference (GSE90496)."
+              ),
+              placement = "right"
+            )
+          ),
+          choices  = reference_dataset_choices(),
+          selected = d$refproj_dataset
+        ),
         shiny::numericInput(
           ns("refproj_knn_k"),
           .settings_label(
@@ -202,7 +230,12 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
 
     shiny::observeEvent(input$reset, {
       for (k in names(SETTINGS_DEFAULTS)) {
-        shiny::updateNumericInput(session, k, value = SETTINGS_DEFAULTS[[k]])
+        v <- SETTINGS_DEFAULTS[[k]]
+        if (is.character(v)) {
+          shiny::updateSelectInput(session, k, selected = v)
+        } else {
+          shiny::updateNumericInput(session, k, value = v)
+        }
       }
     })
 
@@ -234,6 +267,8 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
           input$cnv_gain_threshold, SETTINGS_DEFAULTS$cnv_gain_threshold),
         cnv.loss_threshold                = numeric_or_default(
           input$cnv_loss_threshold, SETTINGS_DEFAULTS$cnv_loss_threshold),
+        refproj.dataset                   = character_or_default(
+          input$refproj_dataset, SETTINGS_DEFAULTS$refproj_dataset),
         refproj.knn_k                     = integer_or_default(
           input$refproj_knn_k, SETTINGS_DEFAULTS$refproj_knn_k),
         refproj.perplexity                = integer_or_default(
@@ -255,6 +290,40 @@ numeric_or_default <- function(x, default) {
 integer_or_default <- function(x, default) {
   if (is.null(x) || length(x) == 0L || is.na(x)) return(default)
   as.integer(x)
+}
+
+character_or_default <- function(x, default) {
+  if (is.null(x) || length(x) == 0L || is.na(x) || !nzchar(x)) return(default)
+  as.character(x)
+}
+
+# Available reference datasets for the projection-dataset picker, read from
+# the pipeline's authoritative registry (.REFERENCE_DATASETS in
+# reference_projection.R) so the Settings panel and the pipeline never drift
+# as datasets are added. Returns a named character vector (label -> key)
+# suitable for selectInput(); falls back to the COMET default if the
+# registry file cannot be located or parsed.
+#
+# reference_projection.R has no top-level side effects (it only defines the
+# registry list and functions; library() calls live inside function bodies),
+# so sourcing it into a throwaway environment is cheap and safe.
+reference_dataset_choices <- function() {
+  fallback <- c("COMET primary-diagnostic (1915 patient tumours)" = "COMET_1915")
+  reg_file <- tryCatch(
+    file.path(pipeline_dir(), "pipeline_modules", "reference_projection.R"),
+    error = function(e) NULL
+  )
+  if (is.null(reg_file) || !file.exists(reg_file)) return(fallback)
+  reg <- tryCatch({
+    e <- new.env()
+    sys.source(reg_file, envir = e)
+    get(".REFERENCE_DATASETS", envir = e)
+  }, error = function(e) NULL)
+  if (is.null(reg) || !length(reg)) return(fallback)
+  stats::setNames(
+    names(reg),
+    vapply(reg, function(d) d$label %||% "(unnamed dataset)", character(1))
+  )
 }
 
 # Read the parameters block from a run's manifest. Returns NULL if missing.
@@ -287,12 +356,16 @@ apply_params_to_inputs <- function(session, params) {
     dim_umap_neighbors  = params$dim.umap_n_neighbors,
     cnv_gain_threshold  = cnv_gain,
     cnv_loss_threshold  = cnv_loss,
+    refproj_dataset     = params$refproj.dataset,
     refproj_knn_k       = params$refproj.knn_k,
     refproj_perplexity  = params$refproj.perplexity
   )
   for (input_id in names(pairs)) {
     v <- pairs[[input_id]]
-    if (!is.null(v) && length(v) == 1L && !is.na(v)) {
+    if (is.null(v) || length(v) != 1L || is.na(v)) next
+    if (input_id == "refproj_dataset") {
+      shiny::updateSelectInput(session, input_id, selected = as.character(v))
+    } else {
       shiny::updateNumericInput(session, input_id, value = v)
     }
   }

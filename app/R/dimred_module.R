@@ -163,7 +163,7 @@ dimred_module_server <- function(id, results) {
         shiny::tags$strong(sprintf("%d sample(s) ", nrow(rp$projected))),
         sprintf(paste0("projected onto the %s reference — %d reference ",
                        "samples in %d tumour groups. "),
-                rp$dataset, nrow(rp$ref_meta),
+                rp$label %||% rp$dataset, nrow(rp$ref_meta),
                 length(unique(rp$ref_meta$tumor_group))),
         paste("Dark diamonds are your samples; the coloured cloud is the",
               "reference. Samples with near-identical methylomes share",

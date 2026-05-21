@@ -28,19 +28,49 @@
 
 # Registry of available reference datasets. Each entry names the files under
 # reference_dir and the metadata columns carrying the Sentrix ID, the
-# tumour-class label, and the per-class plotting colour. v2.0.0 ships the
-# COMET primary-diagnostic set; the full 4685-sample COMET set is a v2.1
-# candidate and would be added here.
+# tumour-class label, and the per-class plotting colour. v2.0.0 shipped the
+# COMET primary-diagnostic set; v2.1 adds the Capper et al. CNS-tumour
+# reference (GSE90496). The full 4685-sample COMET set is still a candidate
+# and would be added here the same way.
+#
+# The reference beta matrix ships pre-built as a compact .rds (`beta_rds`) —
+# the canonical format for every dataset (smaller and far faster to load
+# than a CSV). `beta_csv` is an optional on-ramp: if only a CSV is present,
+# load_reference() parses it once and caches the .rds. Both shipped datasets
+# set beta_csv = NA, so the .rds is the single source of truth.
+#
+# A query can be projected onto any of these — the app's Settings panel
+# exposes the choice (settings_module.R reads this registry directly so the
+# two never drift), and load_reference(dataset) resolves a key to its files.
 .REFERENCE_DATASETS <- list(
   COMET_1915 = list(
     label       = "COMET primary-diagnostic (1915 patient tumours)",
     embedding   = "tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData",
     beta_rds    = "beta_1915_COMET.rds",
-    beta_csv    = "beta_top10K_COMET_ped_patient_diagnostic_primary1915samples2.csv",
+    beta_csv    = NA_character_,
     metadata    = "COMET_Labkey_August_12_2025.csv",
     sentrix_col = "X850k Tumor File Name",
     class_col   = "Tumor Group For Clustering",
     color_col   = "Col"
+  ),
+
+  # Capper et al. (2018) CNS-tumour methylation reference, GSE90496 — 2801
+  # samples across 91 methylation classes. The metadata is per-sample (one
+  # row per GSM sample): GSE90496_MC_MCF_color_labels_key.csv carries the
+  # methylation class (`meth.class`) and its colour (`col`). The sibling
+  # GSE90496_color_key_allRef.csv is only a class -> colour lookup, not
+  # per-sample, so load_reference() (which matches the embedding's samples
+  # to metadata rows) cannot consume it directly — and it need not, since
+  # the per-sample `col` values already match that key exactly.
+  Capper_GSE90496 = list(
+    label       = "Capper et al. CNS-tumour reference (2801 samples, GSE90496)",
+    embedding   = "tSNE_embedding_GSE90496_top10K.RData",
+    beta_rds    = "beta_GSE90496_top10K.rds",
+    beta_csv    = NA_character_,
+    metadata    = "GSE90496_MC_MCF_color_labels_key.csv",
+    sentrix_col = "Sample",
+    class_col   = "meth.class",
+    color_col   = "col"
   )
 )
 
@@ -74,12 +104,17 @@ load_reference <- function(dataset = "COMET_1915", reference_dir = "reference") 
          "this problem; the 1915 set does not.)")
   }
 
-  # --- reference beta matrix: prefer the compact .rds, fall back to CSV ---
-  rds <- file.path(reference_dir, spec$beta_rds)
-  csv <- file.path(reference_dir, spec$beta_csv)
+  # --- reference beta matrix ---
+  # The .rds is the canonical format and is what every shipped dataset
+  # provides. beta_csv is an optional fallback (NA when absent): when a CSV
+  # is present but the .rds is not, it is parsed once and cached as the .rds
+  # for every subsequent load.
+  rds     <- file.path(reference_dir, spec$beta_rds)
+  has_csv <- !is.null(spec$beta_csv) && !is.na(spec$beta_csv)
+  csv     <- if (has_csv) file.path(reference_dir, spec$beta_csv) else NA_character_
   if (file.exists(rds)) {
     ref_beta <- readRDS(rds)
-  } else if (file.exists(csv)) {
+  } else if (has_csv && file.exists(csv)) {
     message("load_reference: parsing reference beta CSV (slow) and caching as .rds ...")
     suppressPackageStartupMessages(library(data.table))
     d <- as.data.frame(data.table::fread(csv))
@@ -87,7 +122,8 @@ load_reference <- function(dataset = "COMET_1915", reference_dir = "reference") 
     ref_beta <- as.matrix(d[, -1, drop = FALSE])
     saveRDS(ref_beta, rds)
   } else {
-    stop("Reference beta matrix not found (looked for ", rds, " and ", csv, ")")
+    stop("Reference beta matrix not found (looked for ", rds,
+         if (has_csv) paste(" and", csv) else "", ")")
   }
   ref_beta <- as.matrix(ref_beta)
 
@@ -423,7 +459,8 @@ nearest_reference_class <- function(projected, ref_meta, k = 25, top_n = 3) {
 #' @param output_dir    Directory for the coordinate CSV and plot PDF.
 #' @param perplexity    Projection perplexity (default 5).
 #' @param knn_k         Neighbours for the nearest-class diagnostic (default 25).
-#' @return A list: dataset, projected, class_hints, ref_meta, csv, pdf, hints_csv.
+#' @return A list: dataset, label, projected, class_hints, ref_meta, csv,
+#'   pdf, hints_csv.
 run_reference_projection <- function(samplesheet,
                                      dataset       = "COMET_1915",
                                      reference_dir = "reference",
@@ -462,6 +499,7 @@ run_reference_projection <- function(samplesheet,
   # hints so the Shiny UI can render everything without the 137 MB beta.
   invisible(list(
     dataset     = dataset,
+    label       = reference$label,
     projected   = projected,
     class_hints = class_hints,
     ref_meta    = reference$ref_meta,
