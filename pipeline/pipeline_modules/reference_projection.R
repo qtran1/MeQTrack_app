@@ -284,12 +284,12 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
   p <- ggplot() +
     geom_point(data = rm_,
                aes(x = tSNE1, y = tSNE2, fill = tumor_group),
-               shape = 21, size = 1.6, stroke = 0.1,
+               shape = 21, size = 3.2, stroke = 0.1,
                colour = "grey75", alpha = 0.55) +
     scale_fill_manual(values = col_map, name = "Reference\ntumour group") +
     geom_point(data = projected,
                aes(x = tSNE1, y = tSNE2),
-               shape = 23, size = 6.5, stroke = 1,
+               shape = 23, size = 2.5, stroke = 0.6,
                fill = "#111111", colour = "white") +
     # No per-sample text labels — they crowd the plot. Sample names are
     # available on hover in the interactive (HTML/Shiny) projection view.
