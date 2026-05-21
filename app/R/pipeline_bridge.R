@@ -234,6 +234,12 @@ bridge_kill <- function(handle) {
   if (!is.null(parameters$cnv.threshold)) {
     cfg$cnv$threshold <- parameters$cnv.threshold
   }
+  if (!is.null(parameters$refproj.knn_k)) {
+    cfg$reference_projection$knn_k <- parameters$refproj.knn_k
+  }
+  if (!is.null(parameters$refproj.perplexity)) {
+    cfg$reference_projection$perplexity <- parameters$refproj.perplexity
+  }
   if (!length(cfg)) return(NULL)
   path <- file.path(output_dir, "run_config.R")
   # Serialize via dput so we don't hand-roll R syntax. Wrapping in a named

@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # Wave 6 Theme 6d Phase 1 — user-tunable pipeline parameters.
 #
-# Five numeric knobs across QC and dimensionality reduction. The reactive
+# Numeric knobs across QC, dimensionality reduction, CNV and reference
+# projection. The reactive
 # returned by settings_module_server() is consumed by run_controller, which
 # passes the values into bridge_launch on each run. Per the v1.1 decision,
 # these apply to the next launch only — there is no workspace-default
@@ -23,7 +24,9 @@ SETTINGS_DEFAULTS <- list(
   dim_tsne_perplexity     = 5L,
   dim_umap_neighbors      = 15L,
   cnv_gain_threshold      =  0.18,
-  cnv_loss_threshold      = -0.20
+  cnv_loss_threshold      = -0.20,
+  refproj_knn_k           = 25L,
+  refproj_perplexity      = 5L
 )
 
 # Build the "<name> [?] (default X)" label for a numeric input. The info
@@ -151,6 +154,35 @@ settings_module_ui <- function(id) {
           ),
           value = d$cnv_loss_threshold, min = -1, max = 0, step = 0.01
         )
+      ),
+      shiny::div(
+        class = "col-md-6",
+        shiny::h6(class = "text-muted text-uppercase small fw-semibold",
+                  "Reference projection"),
+        shiny::numericInput(
+          ns("refproj_knn_k"),
+          .settings_label(
+            "Nearest-class k", d$refproj_knn_k,
+            paste(
+              "Number of nearest reference samples that vote on the tumour",
+              "class for each projected sample. Larger = smoother but can",
+              "blur small classes; 25 is the default."
+            )
+          ),
+          value = d$refproj_knn_k, min = 1, max = 200, step = 1
+        ),
+        shiny::numericInput(
+          ns("refproj_perplexity"),
+          .settings_label(
+            "Projection perplexity", d$refproj_perplexity,
+            paste(
+              "Neighbourhood size used when placing your samples onto the",
+              "reference embedding (snifter's projection step). Distinct",
+              "from the t-SNE perplexity above; 5 is the default."
+            )
+          ),
+          value = d$refproj_perplexity, min = 1, max = 100, step = 1
+        )
       )
     ),
     shiny::div(
@@ -201,7 +233,11 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
         cnv.gain_threshold                = numeric_or_default(
           input$cnv_gain_threshold, SETTINGS_DEFAULTS$cnv_gain_threshold),
         cnv.loss_threshold                = numeric_or_default(
-          input$cnv_loss_threshold, SETTINGS_DEFAULTS$cnv_loss_threshold)
+          input$cnv_loss_threshold, SETTINGS_DEFAULTS$cnv_loss_threshold),
+        refproj.knn_k                     = integer_or_default(
+          input$refproj_knn_k, SETTINGS_DEFAULTS$refproj_knn_k),
+        refproj.perplexity                = integer_or_default(
+          input$refproj_perplexity, SETTINGS_DEFAULTS$refproj_perplexity)
       )
     })
   })
@@ -250,7 +286,9 @@ apply_params_to_inputs <- function(session, params) {
     dim_tsne_perplexity = params$dim.tsne_perplexity,
     dim_umap_neighbors  = params$dim.umap_n_neighbors,
     cnv_gain_threshold  = cnv_gain,
-    cnv_loss_threshold  = cnv_loss
+    cnv_loss_threshold  = cnv_loss,
+    refproj_knn_k       = params$refproj.knn_k,
+    refproj_perplexity  = params$refproj.perplexity
   )
   for (input_id in names(pairs)) {
     v <- pairs[[input_id]]
