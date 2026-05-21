@@ -28,11 +28,12 @@
 # pipeline still runs them as Step 2 + Step 3 internally, but they map onto
 # the same UI row (see PIPELINE_STEP_TO_STAGE below).
 RUN_STAGES <- c(
-  preprocess    = "Preprocessing",
-  qc            = "QC and probe filtering",
-  dim_reduction = "Dimensionality reduction",
-  cnv           = "Copy-number variation",
-  visualization = "Report generation"
+  preprocess           = "Preprocessing",
+  qc                   = "QC and probe filtering",
+  dim_reduction        = "Dimensionality reduction",
+  reference_projection = "Reference projection",
+  cnv                  = "Copy-number variation",
+  visualization        = "Report generation"
 )
 
 # The pipeline emits "Step N:" log lines for the five user-facing steps.
@@ -63,16 +64,19 @@ RUN_STEP_ALL <- "all"
 # Upstream artifact requirements for each per-step run. Each element is a
 # list of "requirement groups" (paths relative to run_dir). A group is
 # satisfied if ANY of its files exists; the step is runnable if ALL groups
-# are satisfied. Preprocess has no upstream prereqs.
+# are satisfied. Preprocess and reference projection have no upstream
+# prereqs — both read the IDATs directly, so their buttons are always
+# enabled (when no run is in progress).
 STEP_PREREQS <- list(
-  preprocess    = list(),
-  qc            = list("processed_data/preprocessed_data.RData"),
-  dim_reduction = list(c("processed_data/preprocessed_data.RData",
-                         "processed_data/filtered_beta_values.txt")),
-  cnv           = list("processed_data/preprocessed_data.RData"),
-  visualization = list(c("qc/qc_results.RData",
-                         "dimensionality_reduction/dim_reduction_results.RData",
-                         "cnv/cnv_results.RData"))
+  preprocess           = list(),
+  qc                   = list("processed_data/preprocessed_data.RData"),
+  dim_reduction        = list(c("processed_data/preprocessed_data.RData",
+                                "processed_data/filtered_beta_values.txt")),
+  reference_projection = list(),
+  cnv                  = list("processed_data/preprocessed_data.RData"),
+  visualization        = list(c("qc/qc_results.RData",
+                                "dimensionality_reduction/dim_reduction_results.RData",
+                                "cnv/cnv_results.RData"))
 )
 
 # ---------------------------------------------------------------------------
@@ -193,11 +197,12 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
                    !is.null(rv$run_dir) &&
                    dir.exists(rv$run_dir)
 
-      # Non-preprocess per-step runs need an existing run_dir AND its
-      # upstream artifacts. Block the launch and tell the user why.
-      if (!identical(step_key, RUN_STEP_ALL) &&
-          !identical(step_key, "preprocess") &&
-          !reuse_dir) {
+      # preprocess and reference_projection are self-contained — they read
+      # the IDATs directly — so they can launch without an existing run_dir.
+      # The other per-step runs need upstream artifacts and a run_dir to
+      # find them; block the launch and tell the user why.
+      self_contained <- step_key %in% c("preprocess", "reference_projection")
+      if (!identical(step_key, RUN_STEP_ALL) && !self_contained && !reuse_dir) {
         shiny::showNotification(
           sprintf("Cannot run %s alone — start with a full run (or just preprocess) first.",
                   RUN_STAGES[[step_key]]),
@@ -335,6 +340,8 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
                         launch_step("qc"),            ignoreInit = TRUE)
     shiny::observeEvent(input$run_dim_reduction,
                         launch_step("dim_reduction"), ignoreInit = TRUE)
+    shiny::observeEvent(input$run_reference_projection,
+                        launch_step("reference_projection"), ignoreInit = TRUE)
     shiny::observeEvent(input$run_cnv,
                         launch_step("cnv"),           ignoreInit = TRUE)
     shiny::observeEvent(input$run_visualization,
@@ -680,16 +687,18 @@ synthesize_stage_state_from_disk <- function(run_dir) {
                         names(RUN_STAGES))
   if (is.null(run_dir) || !dir.exists(run_dir)) return(ss)
   has <- list(
-    preprocess    = file.exists(file.path(run_dir, "processed_data",
-                                          "preprocessed_data.RData")),
-    qc            = file.exists(file.path(run_dir, "qc",
-                                          "qc_results.RData")),
-    dim_reduction = file.exists(file.path(run_dir, "dimensionality_reduction",
-                                          "dim_reduction_results.RData")),
-    cnv           = file.exists(file.path(run_dir, "cnv",
-                                          "cnv_results.RData")),
-    visualization = length(list.files(file.path(run_dir, "reports"),
-                                       pattern = "\\.html$")) > 0L
+    preprocess           = file.exists(file.path(run_dir, "processed_data",
+                                                 "preprocessed_data.RData")),
+    qc                   = file.exists(file.path(run_dir, "qc",
+                                                 "qc_results.RData")),
+    dim_reduction        = file.exists(file.path(run_dir, "dimensionality_reduction",
+                                                 "dim_reduction_results.RData")),
+    reference_projection = file.exists(file.path(run_dir, "reference_projection",
+                                                 "reference_projection_results.RData")),
+    cnv                  = file.exists(file.path(run_dir, "cnv",
+                                                 "cnv_results.RData")),
+    visualization        = length(list.files(file.path(run_dir, "reports"),
+                                              pattern = "\\.html$")) > 0L
   )
   for (k in names(ss)) {
     if (isTRUE(has[[k]])) ss[[k]] <- "done"
