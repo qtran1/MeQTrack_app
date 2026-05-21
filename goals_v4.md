@@ -251,9 +251,23 @@ controllable in the app.
 
 ## Scope discipline
 
-Reference projection is the only marquee capability of v2.0.0.
-Deferred to v2.1+: UMAP reference projection, additional reference
-datasets, alternate projection methods, batch correction.
+Reference projection is the only marquee capability of v2.0.0, shipping
+the single 1915-sample COMET reference.
+
+Deferred to v2.1+ — **additional reference datasets**: the 4685-sample
+full-COMET set, the **Capper** CNS-tumour classifier, and a **sarcoma**
+classifier (the user is sourcing the latter two). The
+`.REFERENCE_DATASETS` registry in `reference_projection.R` already
+supports them — each new reference needs three artefacts:
+1. a trained `snifter` t-SNE embedding (`.RData`);
+2. the training β-matrix it was built on (the `old` data for projection);
+3. a `Sentrix_ID → tumour-class` metadata table.
+If only raw data is found, the embedding still has to be trained
+(`snifter::fitsne`). v2.1 also adds the UI **reference-dataset
+selector** (skipped in Phase 3 while only one dataset existed).
+
+Also deferred to v2.1+: UMAP reference projection, alternate projection
+methods, batch correction.
 
 ## Open questions still to resolve
 
