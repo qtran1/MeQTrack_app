@@ -137,10 +137,13 @@ reference. Deferred to v2.1.
   Also done: `reference_projection` is now an independently-runnable
   per-step Run button in the Run tab.
 
+  **EPICv2 harmonisation fixed:** `.normalize_probe_ids()` strips the
+  EPICv2 manifest suffix and averages replicate probes — the example
+  EPICv2 query went from 0% to 94% reference-probe match. (Also fixed:
+  `--output` now resolves to an absolute path even for a new directory.)
+
   **Still open:** the same class-hint table in the HTML report; P3-T5
-  (Settings knobs); the EPICv2 probe-name harmonisation gap (EPICv2 cg
-  IDs carry suffixes, so they barely intersect the reference probe set
-  and the query collapses to the reference mean); then Phase 4.
+  (Settings knobs); then Phase 4.
 
 ---
 
@@ -246,9 +249,9 @@ datasets, alternate projection methods, batch correction.
 
 ## Open questions still to resolve
 
-- Probe-set harmonization aggressiveness when the user array is EPICv2
-  and the reference is an EPICv1/EPIC overlap set — how many missing
-  probes before a projection is untrustworthy and should be refused.
+- Probe-set harmonisation: EPICv2 suffix-stripping is done. Remaining
+  judgement call — `harmonize_query()` only *warns* below 80% probe
+  match; should a very low match instead hard-refuse the projection?
 - Confidence visualization in the UI beyond the hint table (e.g.
   shading projected points by k-NN distance).
 - Whether the 4685-sample COMET set is added in v2.1 as a second
