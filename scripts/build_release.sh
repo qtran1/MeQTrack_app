@@ -4,8 +4,9 @@
 # What goes in:
 #   app/            full Shiny app
 #   pipeline/       pipeline R code, example data, yamapData_*.tar.gz
-#   reference/      COMET reference embedding + metadata + beta .rds
-#                   (the multi-hundred-MB source CSVs are excluded)
+#   reference/      COMET + Capper reference embeddings, metadata, and
+#                   beta .rds files (the multi-hundred-MB source CSVs
+#                   are excluded)
 #   renv.lock       package lockfile
 #   renv/           only activate.R, settings.json, .gitignore (NOT library/)
 #   .Rprofile       activates renv on R startup
@@ -54,21 +55,29 @@ EOS
   exit 1
 fi
 
-ref_beta="reference/beta_1915_COMET.rds"
-if [ ! -f "${ref_beta}" ]; then
-  cat >&2 <<EOS
+# Reference beta matrices are gitignored (>100 MB each), but the release
+# zip MUST include every registered dataset's .rds — the
+# reference-projection step has nothing to project against otherwise.
+# Each is the compact .rds that reference_projection.R::load_reference()
+# reads. Add a line here when a new dataset joins .REFERENCE_DATASETS.
+ref_betas=(
+  "reference/beta_1915_COMET.rds"
+  "reference/beta_GSE90496_top10K.rds"
+)
+for ref_beta in "${ref_betas[@]}"; do
+  if [ ! -f "${ref_beta}" ]; then
+    cat >&2 <<EOS
 ERROR: ${ref_beta} is missing.
 
-The COMET reference beta matrix is gitignored (>100 MB), but the
-release zip MUST include it — the reference-projection step has nothing
-to project against without it. It is the compact .rds that
-reference_projection.R::load_reference() reads (auto-generated from the
-source CSV on first use).
+Reference beta matrices are gitignored (>100 MB each), but the release
+zip MUST include each registered dataset's .rds — the
+reference-projection step has nothing to project against without it.
 
 Place the .rds at ${ref_beta} and re-run this script.
 EOS
-  exit 1
-fi
+    exit 1
+  fi
+done
 
 if ! command -v rsync >/dev/null 2>&1; then
   echo "ERROR: rsync is required (preinstalled on macOS / Linux)." >&2
@@ -156,6 +165,9 @@ required=(
   "reference/beta_1915_COMET.rds"
   "reference/tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData"
   "reference/COMET_Labkey_August_12_2025.csv"
+  "reference/beta_GSE90496_top10K.rds"
+  "reference/tSNE_embedding_GSE90496_top10K.RData"
+  "reference/GSE90496_MC_MCF_color_labels_key.csv"
   "renv.lock"
   "renv/activate.R"
   ".Rprofile"
