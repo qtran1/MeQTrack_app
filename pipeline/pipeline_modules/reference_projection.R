@@ -289,11 +289,10 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
     scale_fill_manual(values = col_map, name = "Reference\ntumour group") +
     geom_point(data = projected,
                aes(x = tSNE1, y = tSNE2),
-               shape = 23, size = 3.6, stroke = 0.7,
+               shape = 23, size = 6.5, stroke = 1,
                fill = "#111111", colour = "white") +
-    geom_text(data = projected,
-              aes(x = tSNE1, y = tSNE2, label = Sample),
-              size = 2.8, vjust = -1.1, fontface = "bold") +
+    # No per-sample text labels — they crowd the plot. Sample names are
+    # available on hover in the interactive (HTML/Shiny) projection view.
     labs(title = sprintf("Query projected onto %s", reference$label),
          subtitle = sprintf("%d query sample(s); black diamonds = query, coloured = reference",
                             nrow(projected)),
