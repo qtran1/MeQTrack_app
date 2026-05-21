@@ -743,11 +743,18 @@ run_pipeline <- function(step) {
       load(file.path(dirs$cnv, "cnv_results.RData"))
     }
 
+    if (file.exists(file.path(dirs$reference_projection,
+                              "reference_projection_results.RData"))) {
+      load(file.path(dirs$reference_projection,
+                     "reference_projection_results.RData"))
+    }
+
     # Generate reports
     generate_report(
       qc_results    = if (exists("qc_results"))           qc_results           else NULL,
       dim_reduction = if (exists("dim_reduction_results")) dim_reduction_results else NULL,
       cnv_data      = if (exists("cnv_results"))           cnv_results           else NULL,
+      reference_projection = if (exists("rp_result"))     rp_result            else NULL,
       sample_info   = sample_info,
       output_dirs   = dirs,
       output_dir    = dirs$reports

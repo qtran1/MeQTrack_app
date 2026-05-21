@@ -5,6 +5,8 @@
 #' @param qc_results QC results
 #' @param dim_reduction Dimensionality reduction results
 #' @param cnv_data CNV analysis results
+#' @param reference_projection Reference-projection results (the rp_result
+#'   list from run_reference_projection: dataset, projected, class_hints, ...)
 #' @param sample_info Sample information data frame
 #' @param output_dirs Named list of module output directories (from setup_directories())
 #' @param output_dir Output directory for reports
@@ -12,6 +14,7 @@
 generate_report <- function(qc_results = NULL,
                           dim_reduction = NULL,
                           cnv_data = NULL,
+                          reference_projection = NULL,
                           sample_info = NULL,
                           output_dirs = NULL,
                           output_dir = ".") {
@@ -44,12 +47,13 @@ generate_report <- function(qc_results = NULL,
 
     # Save all results into a single RData file loaded by the Rmd
     report_data <- list(
-      qc_results      = qc_results,
-      dim_reduction   = dim_reduction,
-      cnv_data        = cnv_data,
-      sample_info     = sample_info,
-      output_dirs     = output_dirs,
-      generation_time = Sys.time()
+      qc_results           = qc_results,
+      dim_reduction        = dim_reduction,
+      cnv_data             = cnv_data,
+      reference_projection = reference_projection,
+      sample_info          = sample_info,
+      output_dirs          = output_dirs,
+      generation_time      = Sys.time()
     )
     save(report_data, file = file.path(abs_output_dir, "report_data.RData"))
 
@@ -84,7 +88,8 @@ generate_report <- function(qc_results = NULL,
 
   # Always produce a plain-text report as a reliable fallback
   if (is.null(report_files$html)) {
-    text_report <- generate_text_report(qc_results, dim_reduction, cnv_data, sample_info)
+    text_report <- generate_text_report(qc_results, dim_reduction, cnv_data,
+                                        sample_info, reference_projection)
     text_file   <- file.path(output_dir, "methylation_analysis_report.txt")
     writeLines(text_report, text_file)
     message("Plain-text report saved: ", text_file)
@@ -157,6 +162,7 @@ resolve_plot_path <- function(stored_path, module_dir = NULL) {
       file.path("..", "dimensionality_reduction", fname),
       file.path("..", "cnv",                      fname),
       file.path("..", "cnv", "plots",             fname),
+      file.path("..", "reference_projection",     fname),
       fname
   )) {
     if (file.exists(rel)) return(rel)
@@ -333,6 +339,58 @@ if (!is.null(p)) knitr::include_graphics(p) else cat("*Dendrogram not available*
 cat("No hierarchical clustering results available.")
 ```
 
+# Reference Projection {.tabset}
+
+```{r refproj_check}
+rp     <- report_data$reference_projection
+has_rp <- !is.null(rp)
+rp_dir <- if (!is.null(odirs)) odirs$reference_projection else NULL
+```
+
+```{r refproj_summary, eval=has_rp}
+cat(sprintf("Query samples projected onto the **%s** reference (%s reference samples). Each sample is assigned its nearest reference tumour group by a k-NN vote in the embedding.\n\n",
+            rp$dataset,
+            if (!is.null(rp$ref_meta)) nrow(rp$ref_meta) else "?"))
+```
+
+## Class Hints
+
+```{r refproj_table, eval=has_rp}
+proj <- as.data.frame(rp$projected)
+ch   <- rp$class_hints
+if (!is.null(ch)) {
+  ch  <- ch[match(proj$Sample, ch$Sample), , drop = FALSE]
+  tbl <- data.frame(
+    Sample          = proj$Sample,
+    tSNE1           = round(proj$tSNE1, 2),
+    tSNE2           = round(proj$tSNE2, 2),
+    `Nearest class` = ch$nearest_class,
+    Confidence      = sprintf("%.0f%%", 100 * ch$confidence),
+    `Top classes`   = ch$top_classes,
+    Ambiguous       = ifelse(ch$ambiguous %in% TRUE, "yes", ""),
+    Distant         = ifelse(ch$distant_from_reference %in% TRUE, "yes", ""),
+    check.names     = FALSE
+  )
+} else {
+  tbl <- data.frame(Sample = proj$Sample,
+                    tSNE1  = round(proj$tSNE1, 2),
+                    tSNE2  = round(proj$tSNE2, 2),
+                    check.names = FALSE)
+}
+show_table(tbl, caption = "Per-sample nearest reference tumour class")
+```
+
+```{r refproj_unavailable, eval=!has_rp}
+cat("No reference projection results available.")
+```
+
+## Projection Plot
+
+```{r refproj_plot, eval=has_rp}
+p <- resolve_plot_path(rp$pdf, rp_dir)
+if (!is.null(p)) knitr::include_graphics(p) else cat("*Projection plot not available*\n\n")
+```
+
 # Copy Number Variation Analysis {.tabset}
 
 ```{r cnv_check}
@@ -405,8 +463,10 @@ sessionInfo()
 #' @param dim_reduction Dimensionality reduction results
 #' @param cnv_data CNV analysis results
 #' @param sample_info Sample information data frame
+#' @param reference_projection Reference-projection results (rp_result), optional
 #' @return Character vector with report text
-generate_text_report <- function(qc_results, dim_reduction, cnv_data, sample_info) {
+generate_text_report <- function(qc_results, dim_reduction, cnv_data,
+                                 sample_info, reference_projection = NULL) {
   report_lines <- c(
     "=================================",
     "Methylation Array Analysis Report",
@@ -472,6 +532,26 @@ generate_text_report <- function(qc_results, dim_reduction, cnv_data, sample_inf
       paste("Number of segments:", if (!is.null(cnv_data$segments)) nrow(cnv_data$segments) else "unknown"),
       ""
     )
+  }
+
+  # Reference projection summary
+  if (!is.null(reference_projection) &&
+      !is.null(reference_projection$class_hints)) {
+    ch <- reference_projection$class_hints
+    report_lines <- c(report_lines,
+      "Reference Projection Summary",
+      "---------------------------",
+      paste("Reference dataset:", reference_projection$dataset),
+      paste("Samples projected:", nrow(ch)),
+      ""
+    )
+    for (i in seq_len(nrow(ch))) {
+      report_lines <- c(report_lines,
+        sprintf("  %s -> %s (%.0f%% confidence)%s",
+                ch$Sample[i], ch$nearest_class[i], 100 * ch$confidence[i],
+                if (isTRUE(ch$ambiguous[i])) " [ambiguous]" else ""))
+    }
+    report_lines <- c(report_lines, "")
   }
 
   return(report_lines)
