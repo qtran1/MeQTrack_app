@@ -129,8 +129,18 @@ reference. Deferred to v2.1.
   recording the reference dataset/version in `run_manifest.json` — better
   handled in the bridge (Phase 4).
 
-  **Next:** P3-T4 — surface the class-hint table in the UI projection
-  panel and the HTML report (now unblocked by Phase 2).
+- **P3-T4 — class-hint table in the UI done.** A per-sample DT table
+  under the projection scatter (`dimred_module.R`) lists every query
+  sample with coordinates, nearest class, confidence, top classes and
+  ambiguous/distant flags — so all samples stay visible even when
+  near-identical methylomes (e.g. replicates) overlap to one marker.
+  Also done: `reference_projection` is now an independently-runnable
+  per-step Run button in the Run tab.
+
+  **Still open:** the same class-hint table in the HTML report; P3-T5
+  (Settings knobs); the EPICv2 probe-name harmonisation gap (EPICv2 cg
+  IDs carry suffixes, so they barely intersect the reference probe set
+  and the query collapses to the reference mean); then Phase 4.
 
 ---
 
