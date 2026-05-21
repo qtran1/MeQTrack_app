@@ -119,6 +119,16 @@ default_config <- function() {
       frequency_plot  = TRUE
     ),
 
+    # Reference projection (v2.0.0). Projects the user's samples onto a
+    # pre-trained reference t-SNE embedding via snifter. `reference_dir`
+    # is resolved relative to the pipeline/ directory when not absolute.
+    reference_projection = list(
+      enabled       = TRUE,
+      dataset       = "COMET_1915",   # key into .REFERENCE_DATASETS
+      reference_dir = "../reference",
+      perplexity    = 5
+    ),
+
     # Output
     output = list(
       include_interactive_plots = TRUE,
@@ -138,6 +148,7 @@ setup_directories <- function(main_dir) {
     qc                    = file.path(main_dir, "qc"),
     dim_reduction         = file.path(main_dir, "dimensionality_reduction"),
     cnv                   = file.path(main_dir, "cnv"),
+    reference_projection  = file.path(main_dir, "reference_projection"),
     figures               = figures,
     figures_qc            = file.path(figures, "qc"),
     figures_dim_reduction = file.path(figures, "dim_reduction"),
