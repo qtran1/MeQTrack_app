@@ -149,7 +149,7 @@ ui <- bslib::page_navbar(
   bslib::nav_panel(
     title = "Dim. reduction", icon = icon("diagram-project"),
     bslib::card(
-      bslib::card_header("t-SNE / UMAP / Clustering"),
+      bslib::card_header("t-SNE / UMAP / Clustering / Reference projection"),
       bslib::card_body(dimred_ui, fillable = FALSE)
     )
   ),

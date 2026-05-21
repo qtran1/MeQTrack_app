@@ -104,7 +104,20 @@ reference. Deferred to v2.1.
   in `<run>/reference_projection/`. The step is self-contained (reads
   IDATs + SWAN itself) and tryCatch-wrapped so a failure doesn't abort
   the run. The basilisk Python env provisions on first use.
-  **Next: P1-GATE** (user demo), then Phase 2 (nearest-class diagnostic).
+
+- **Phase 3 — projection view done** (built before Phase 2, by request).
+  A "Reference projection" panel in the Dim. reduction tab
+  (`dimred_module.R`): a plotly scatter of the reference cloud — coloured
+  by tumour group, faded — with the user's samples overlaid as dark
+  diamonds, plus a show/hide-reference toggle and a tumour-group filter
+  (P3-T1 / T2 / T3). `reference_projection.R` now saves the reference
+  cloud metadata (`ref_meta`) to the run folder; `results_loader.R` feeds
+  it to the UI. **Not done:** P3-T4 (class-hint table — needs Phase 2)
+  and P3-T5 (Settings knobs). Pipeline CLI fix along the way: `--input` /
+  `--output` now resolve relative to the invocation directory rather than
+  the internal `pipeline/` `setwd()`.
+
+  **Next: Phase 2** (nearest-class diagnostic), which also unblocks P3-T4.
 
 ---
 

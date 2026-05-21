@@ -1,6 +1,7 @@
 # app/R/dimred_module.R
 # ---------------------------------------------------------------------------
-# Dim-reduction views: t-SNE, UMAP, hierarchical clustering.
+# Dim-reduction views: t-SNE, UMAP, hierarchical clustering, reference
+# projection.
 #
 # t-SNE and UMAP are rendered with plotly so the user can hover for sample
 # names and pick a metadata column to color by. QC-fail samples always use
@@ -42,6 +43,17 @@ dimred_module_ui <- function(id) {
       shinycssloaders::withSpinner(
         plotly::plotlyOutput(ns("dendro_plot"), height = "600px"),
         type = 7, color = COLORS$primary
+      )
+    ),
+    bslib::nav_panel(
+      "Reference projection",
+      shiny::uiOutput(ns("refproj_header")),
+      shiny::fluidRow(
+        shiny::column(3, shiny::uiOutput(ns("refproj_controls"))),
+        shiny::column(9, shinycssloaders::withSpinner(
+          plotly::plotlyOutput(ns("refproj_plot"), height = "600px"),
+          type = 7, color = COLORS$primary
+        ))
       )
     )
   )
@@ -131,6 +143,56 @@ dimred_module_server <- function(id, results) {
                  plotly_defaults())
       }
       dendro_plotly(r$hclust$hclust, r$qc_fail_ids)
+    })
+
+    # --- Reference projection ------------------------------------------
+    output$refproj_header <- shiny::renderUI({
+      r <- results()
+      if (is.null(r) || is.null(r$reference_projection)) {
+        return(shiny::div(class = "alert alert-secondary",
+                          "No reference projection yet. Run the pipeline first."))
+      }
+      rp <- r$reference_projection
+      shiny::div(
+        class = "alert alert-info",
+        shiny::tags$strong(sprintf("%d sample(s) ", nrow(rp$projected))),
+        sprintf(paste0("projected onto the %s reference — %d reference ",
+                       "samples in %d tumour groups. "),
+                rp$dataset, nrow(rp$ref_meta),
+                length(unique(rp$ref_meta$tumor_group))),
+        "Dark diamonds are your samples; the coloured cloud is the reference."
+      )
+    })
+
+    output$refproj_controls <- shiny::renderUI({
+      r <- results()
+      if (is.null(r) || is.null(r$reference_projection)) return(NULL)
+      groups <- sort(unique(r$reference_projection$ref_meta$tumor_group))
+      shiny::tagList(
+        shiny::h6("Display"),
+        shiny::checkboxInput(ns("refproj_show_ref"),
+                             "Show reference cloud", value = TRUE),
+        shiny::h6("Filter reference groups"),
+        shiny::selectizeInput(ns("refproj_classes"), label = NULL,
+                              choices = groups, multiple = TRUE,
+                              options = list(placeholder = "All tumour groups")),
+        shiny::tags$small(class = "text-muted",
+                          "Leave empty to show every group.")
+      )
+    })
+
+    output$refproj_plot <- plotly::renderPlotly({
+      r <- results()
+      if (is.null(r) || is.null(r$reference_projection)) {
+        return(plotly::plot_ly(type = "scatter", mode = "markers") |>
+                 plotly_defaults())
+      }
+      scatter_reference_projection(
+        r$reference_projection,
+        show_reference = is.null(input$refproj_show_ref) ||
+                         isTRUE(input$refproj_show_ref),
+        class_filter   = input$refproj_classes
+      )
     })
   })
 }
@@ -329,6 +391,75 @@ dendro_plotly <- function(hc, qc_fail_ids) {
         range = c(0.5, max(lab$x) + 0.5)
       ),
       margin = list(l = 10, r = 30, t = 20, b = 50)
+    ) |>
+    plotly_defaults()
+}
+
+# ---------------------------------------------------------------------------
+# Reference projection
+# ---------------------------------------------------------------------------
+
+# Per-tumour-group colour map from the reference metadata's `color` column
+# (the curated COMET palette). Any value R cannot parse as a colour is
+# replaced with a generated fallback so plotly never errors.
+.refproj_color_map <- function(ref_meta) {
+  m <- tapply(ref_meta$color, ref_meta$tumor_group, function(x) x[[1]])
+  m <- unlist(m)
+  ok <- vapply(m, function(cc) {
+    !is.na(cc) && tryCatch({ grDevices::col2rgb(cc); TRUE },
+                           error = function(e) FALSE)
+  }, logical(1))
+  if (any(!ok)) m[!ok] <- grDevices::rainbow(sum(!ok))
+  m
+}
+
+# Plot the reference embedding (coloured cloud, faded) with the user's
+# projected query samples overlaid as dark diamonds.
+#
+# rp              the results bundle's $reference_projection slot
+#                 (list: dataset, projected, ref_meta)
+# show_reference  whether to draw the reference cloud at all
+# class_filter    character vector of tumour groups to keep (empty = all)
+scatter_reference_projection <- function(rp, show_reference = TRUE,
+                                         class_filter = NULL) {
+  proj <- as.data.frame(rp$projected)
+  fig  <- plotly::plot_ly()
+
+  if (isTRUE(show_reference) && !is.null(rp$ref_meta)) {
+    rm_ <- as.data.frame(rp$ref_meta)
+    if (length(class_filter)) {
+      rm_ <- rm_[rm_$tumor_group %in% class_filter, , drop = FALSE]
+    }
+    if (nrow(rm_) > 0L) {
+      rm_$tumor_group <- factor(rm_$tumor_group)
+      fig <- fig |> plotly::add_markers(
+        data   = rm_, x = ~tSNE1, y = ~tSNE2,
+        color  = ~tumor_group,
+        colors = .refproj_color_map(rp$ref_meta),
+        marker = list(size = 6, opacity = 0.45, line = list(width = 0)),
+        text   = ~tumor_group,
+        hovertemplate = "Reference: %{text}<extra></extra>"
+      )
+    }
+  }
+
+  fig |>
+    plotly::add_markers(
+      data = proj, x = ~tSNE1, y = ~tSNE2,
+      name = "Your samples",
+      marker = list(size = 13, symbol = "diamond",
+                    color = COLORS$ink_900,
+                    line = list(width = 1.6, color = "#ffffff")),
+      text = ~Sample,
+      hovertemplate = paste0(
+        "<b>%{text}</b><br>t-SNE 1: %{x:.2f}<br>",
+        "t-SNE 2: %{y:.2f}<extra>Your sample</extra>")
+    ) |>
+    plotly::layout(
+      xaxis  = list(title = "t-SNE 1"),
+      yaxis  = list(title = "t-SNE 2"),
+      margin = list(l = 50, r = 20, t = 20, b = 50),
+      legend = list(itemsizing = "constant")
     ) |>
     plotly_defaults()
 }
