@@ -142,8 +142,13 @@ reference. Deferred to v2.1.
   EPICv2 query went from 0% to 94% reference-probe match. (Also fixed:
   `--output` now resolves to an absolute path even for a new directory.)
 
-  **Still open:** the same class-hint table in the HTML report; P3-T5
-  (Settings knobs); then Phase 4.
+- **P3-T5 — Settings knobs done.** The Run-tab Settings card now has a
+  Reference projection section — Nearest-class k and Projection
+  perplexity — flowing through `run_config.R` like the QC / dim-reduction
+  knobs. **Phase 3 is now complete.**
+
+  **Still open:** the class-hint table in the HTML report (the report
+  half of P3-T4); then Phase 4 (packaging, caching, release).
 
 ---
 
