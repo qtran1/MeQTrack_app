@@ -58,13 +58,23 @@ opt_parser <- OptionParser(
 )
 opt <- parse_args(opt_parser)
 
-# Resolve --input and --output relative to the directory the user invoked
-# Rscript from, BEFORE the setwd() below moves the working directory into
-# the pipeline/ folder. Without this, a repo-root-relative path such as
-# ./pipeline/data/foo.csv would be re-resolved against pipeline/ and fail.
-# Absolute paths (e.g. those the Shiny bridge passes) pass through unchanged.
-if (!is.null(opt$input))  opt$input  <- normalizePath(opt$input,  mustWork = FALSE)
-if (!is.null(opt$output)) opt$output <- normalizePath(opt$output, mustWork = FALSE)
+# Resolve --input and --output to absolute paths against the directory the
+# user invoked Rscript from, BEFORE the setwd() below moves the working
+# directory into pipeline/. Without this a repo-root-relative path is
+# re-resolved against pipeline/ and lands in the wrong place.
+# normalizePath() alone is not enough: for a path that does not exist yet
+# (the usual --output case) it returns the path unchanged and still
+# relative — so we prepend the invocation directory ourselves for any
+# non-absolute path. Absolute paths (e.g. those the Shiny bridge passes)
+# are only normalised.
+.abs_path <- function(p) {
+  if (is.null(p)) return(p)
+  is_abs <- grepl("^(/|[A-Za-z]:[\\\\/]|\\\\\\\\)", p)
+  if (!is_abs) p <- file.path(getwd(), p)
+  normalizePath(p, winslash = "/", mustWork = FALSE)
+}
+opt$input  <- .abs_path(opt$input)
+opt$output <- .abs_path(opt$output)
 
 
 # Load necessary libraries.
