@@ -54,6 +54,11 @@ stage against the current run directory — useful for tweaking a
 parameter and just redoing dimensionality reduction without re-running
 preprocessing.
 
+The **Reference projection** sub-tab (under Dim. reduction) projects
+your samples onto the bundled COMET reference cohort and reports, per
+sample, the nearest reference tumour group. It runs in a full analysis,
+or on its own via the Reference projection step's Run button.
+
 ## Where your data lives
 
 On first launch the app creates `~/MeQTrack/` with three subfolders:
@@ -70,6 +75,7 @@ runs/<id>/
 ├── qc/                         qc_results.RData, sample_qc_report.csv
 ├── dimensionality_reduction/   tsne / umap / hclust .RData
 ├── cnv/                        cnv_results.RData, segment .seg files
+├── reference_projection/       projected coords, class hints, plot PDF
 ├── figures/                    interactive HTML plots, per-sample CNV PDFs
 ├── reports/
 │   └── methylation_analysis_report.html   ← open this in a browser
@@ -184,6 +190,11 @@ in the pipeline log.
 Expected. Installing Bioconductor from source on a fresh machine is
 the long pole. Subsequent runs reuse the `renv` library and start
 fast.
+
+**First reference-projection run is slow.**
+The projection step uses a Python toolchain (openTSNE via `snifter`)
+that provisions a self-contained Python environment on first use — a
+one-time download of a few minutes. Later runs reuse it.
 
 **Double-clicking `meqtrack.command` does nothing / opens a text
 editor.**

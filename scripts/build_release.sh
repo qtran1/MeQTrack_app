@@ -4,6 +4,8 @@
 # What goes in:
 #   app/            full Shiny app
 #   pipeline/       pipeline R code, example data, yamapData_*.tar.gz
+#   reference/      COMET reference embedding + metadata + beta .rds
+#                   (the multi-hundred-MB source CSVs are excluded)
 #   renv.lock       package lockfile
 #   renv/           only activate.R, settings.json, .gitignore (NOT library/)
 #   .Rprofile       activates renv on R startup
@@ -52,6 +54,22 @@ EOS
   exit 1
 fi
 
+ref_beta="reference/beta_1915_COMET.rds"
+if [ ! -f "${ref_beta}" ]; then
+  cat >&2 <<EOS
+ERROR: ${ref_beta} is missing.
+
+The COMET reference beta matrix is gitignored (>100 MB), but the
+release zip MUST include it — the reference-projection step has nothing
+to project against without it. It is the compact .rds that
+reference_projection.R::load_reference() reads (auto-generated from the
+source CSV on first use).
+
+Place the .rds at ${ref_beta} and re-run this script.
+EOS
+  exit 1
+fi
+
 if ! command -v rsync >/dev/null 2>&1; then
   echo "ERROR: rsync is required (preinstalled on macOS / Linux)." >&2
   exit 1
@@ -94,6 +112,12 @@ rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
 rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
   pipeline/ "${stage_dir}/pipeline/"
 
+# reference/: ship the embeddings, metadata, and the compact beta .rds.
+# The multi-hundred-MB source CSVs (beta_*.csv) stay out — load_reference
+# reads the .rds.
+rsync -a --exclude=".DS_Store" --exclude="beta_*.csv" \
+  reference/ "${stage_dir}/reference/"
+
 # renv/: ship activator, settings, and .gitignore only — never library/.
 mkdir -p "${stage_dir}/renv"
 for f in activate.R settings.json .gitignore; do
@@ -129,6 +153,9 @@ required=(
   "pipeline/methylation_pipeline.R"
   "pipeline/data/yamapData_0.0.3.tar.gz"
   "pipeline/data/keep.probes.EPIC.txt"
+  "reference/beta_1915_COMET.rds"
+  "reference/tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData"
+  "reference/COMET_Labkey_August_12_2025.csv"
   "renv.lock"
   "renv/activate.R"
   ".Rprofile"
