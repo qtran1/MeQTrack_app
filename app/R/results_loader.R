@@ -13,6 +13,7 @@
 #   umap            list(coords, sample_info, umap_object)  or NULL
 #   hclust          list(hclust, distance, method)          or NULL
 #   cnv             list(segments, sample_results, ...)     or NULL
+#   reference_projection  list(dataset, projected, ref_meta) or NULL
 #   metadata_cols   character  — samplesheet columns eligible as color
 #                                variables (Sample_Group, Diagnosis, etc.)
 #   run_url_base    character  — web path (served via addResourcePath) from
@@ -28,7 +29,8 @@ RESULTS_PATHS <- list(
   tsne_rdata      = file.path("dimensionality_reduction", "tsne_results.RData"),
   umap_rdata      = file.path("dimensionality_reduction", "umap_results.RData"),
   hclust_rdata    = file.path("dimensionality_reduction", "hclust_results.RData"),
-  cnv_rdata       = file.path("cnv", "cnv_results.RData")
+  cnv_rdata       = file.path("cnv", "cnv_results.RData"),
+  refproj_rdata   = file.path("reference_projection", "reference_projection_results.RData")
 )
 
 # Columns we never offer as a "coloring variable" on t-SNE/UMAP — they are
@@ -76,11 +78,14 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
   umap   <- .load_rdata(file.path(run_dir, RESULTS_PATHS$umap_rdata),   "umap_results")
   hclust <- .load_rdata(file.path(run_dir, RESULTS_PATHS$hclust_rdata), "hclust_results")
   cnv    <- .load_rdata(file.path(run_dir, RESULTS_PATHS$cnv_rdata),    "cnv_results")
+  reference_projection <- .load_rdata(
+    file.path(run_dir, RESULTS_PATHS$refproj_rdata), "rp_result")
 
   # If literally nothing is on disk yet (very early in a run), don't return
   # a hollow bundle — let consumers keep showing the "no run yet" empty state.
   if (is.null(qc_report) && is.null(sample_info) &&
-      is.null(tsne) && is.null(umap) && is.null(hclust) && is.null(cnv)) {
+      is.null(tsne) && is.null(umap) && is.null(hclust) && is.null(cnv) &&
+      is.null(reference_projection)) {
     return(NULL)
   }
 
@@ -95,6 +100,7 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
     umap          = umap,
     hclust        = hclust,
     cnv           = cnv,
+    reference_projection = reference_projection,
     metadata_cols = metadata_cols,
     run_url_base  = run_url_base
   )

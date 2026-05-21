@@ -318,7 +318,7 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
 #' @param reference_dir Directory holding the reference files.
 #' @param output_dir    Directory for the coordinate CSV and plot PDF.
 #' @param perplexity    Projection perplexity (default 5).
-#' @return A list: reference, projected (data frame), csv, pdf.
+#' @return A list: dataset, projected (data frame), ref_meta, csv, pdf.
 run_reference_projection <- function(samplesheet,
                                      dataset       = "COMET_1915",
                                      reference_dir = "reference",
@@ -337,6 +337,14 @@ run_reference_projection <- function(samplesheet,
 
   message(sprintf("run_reference_projection: done — %d sample(s) projected onto '%s'.",
                   nrow(projected), dataset))
-  invisible(list(reference = dataset, projected = projected,
-                 csv = csv, pdf = pdf))
+  # ref_meta (reference embedding coords + tumour groups + colours) is small
+  # (~1900 rows) and is saved alongside the projected query coords so the
+  # Shiny UI can draw the reference cloud without loading the 137 MB beta.
+  invisible(list(
+    dataset   = dataset,
+    projected = projected,
+    ref_meta  = reference$ref_meta,
+    csv       = csv,
+    pdf       = pdf
+  ))
 }
