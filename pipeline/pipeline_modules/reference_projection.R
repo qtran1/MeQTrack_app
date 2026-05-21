@@ -307,6 +307,72 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
 }
 
 # ---------------------------------------------------------------------------
+# Nearest-class diagnostic
+# ---------------------------------------------------------------------------
+
+#' Assign each projected query sample a nearest reference tumour class by
+#' k-NN vote in the embedding space.
+#'
+#' For each query point the k nearest reference points (Euclidean distance
+#' in the 2-D t-SNE space) vote with their tumour group. The winning group
+#' is the class hint and the vote fraction is the confidence. A sample is
+#' flagged `ambiguous` when no group wins a majority, or the top two are
+#' within 15 percentage points — the between-classes case to surface
+#' rather than forcing a single label. `distant_from_reference` flags a
+#' sample that lands far from any reference cluster (its methylome is
+#' unlike anything in the reference), where the class hint is unreliable.
+#'
+#' @param projected  Data frame from project_onto_reference()
+#'                   (Sample, tSNE1, tSNE2).
+#' @param ref_meta   Reference metadata (tSNE1, tSNE2, tumor_group).
+#' @param k          Number of nearest reference neighbours (default 25).
+#' @param top_n      Classes to list in the `top_classes` summary string.
+#' @return Data frame, one row per query sample.
+nearest_reference_class <- function(projected, ref_meta, k = 25, top_n = 3) {
+  ref_xy  <- as.matrix(ref_meta[, c("tSNE1", "tSNE2")])
+  ref_grp <- as.character(ref_meta$tumor_group)
+  k       <- max(1L, min(as.integer(k), nrow(ref_xy) - 1L))
+
+  # Typical reference neighbourhood spread (mean distance to the k nearest
+  # reference points), from a subsample for speed — the scale against which
+  # a query is judged "distant from the reference".
+  set.seed(1L)
+  sidx <- sample(nrow(ref_xy), min(300L, nrow(ref_xy)))
+  ref_spread <- stats::median(vapply(sidx, function(j) {
+    d <- sqrt((ref_xy[, 1] - ref_xy[j, 1])^2 + (ref_xy[, 2] - ref_xy[j, 2])^2)
+    mean(sort(d)[2:(k + 1L)])          # [2:] excludes the point itself
+  }, numeric(1)))
+
+  rows <- lapply(seq_len(nrow(projected)), function(i) {
+    qx  <- projected$tSNE1[i]; qy <- projected$tSNE2[i]
+    d   <- sqrt((ref_xy[, 1] - qx)^2 + (ref_xy[, 2] - qy)^2)
+    ord <- order(d)[seq_len(k)]
+    votes <- sort(table(ref_grp[ord]), decreasing = TRUE)
+    cls   <- names(votes)
+    frac  <- as.numeric(votes) / k
+
+    runner_conf <- if (length(cls) >= 2L) frac[2] else 0
+    n_top       <- min(top_n, length(cls))
+    data.frame(
+      Sample                 = projected$Sample[i],
+      nearest_class          = cls[1],
+      confidence             = round(frac[1], 3),
+      runner_up_class        = if (length(cls) >= 2L) cls[2] else NA_character_,
+      runner_up_confidence   = round(runner_conf, 3),
+      ambiguous              = frac[1] < 0.5 || (frac[1] - runner_conf) < 0.15,
+      distant_from_reference = mean(d[ord]) > 2.5 * ref_spread,
+      mean_knn_distance      = round(mean(d[ord]), 3),
+      top_classes            = paste(sprintf("%s (%.0f%%)",
+                                             cls[seq_len(n_top)],
+                                             100 * frac[seq_len(n_top)]),
+                                     collapse = ", "),
+      stringsAsFactors       = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -317,12 +383,14 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
 #' @param reference_dir Directory holding the reference files.
 #' @param output_dir    Directory for the coordinate CSV and plot PDF.
 #' @param perplexity    Projection perplexity (default 5).
-#' @return A list: dataset, projected (data frame), ref_meta, csv, pdf.
+#' @param knn_k         Neighbours for the nearest-class diagnostic (default 25).
+#' @return A list: dataset, projected, class_hints, ref_meta, csv, pdf, hints_csv.
 run_reference_projection <- function(samplesheet,
                                      dataset       = "COMET_1915",
                                      reference_dir = "reference",
                                      output_dir    = ".",
-                                     perplexity    = 5) {
+                                     perplexity    = 5,
+                                     knn_k         = 25) {
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
   reference  <- load_reference(dataset, reference_dir)
@@ -330,20 +398,36 @@ run_reference_projection <- function(samplesheet,
   query_h    <- harmonize_query(query_beta, reference$ref_beta)
   projected  <- project_onto_reference(reference, query_h, perplexity)
 
+  # Nearest-class diagnostic — k-NN vote in the embedding space.
+  class_hints <- nearest_reference_class(projected, reference$ref_meta, k = knn_k)
+  for (i in seq_len(nrow(class_hints))) {
+    ch <- class_hints[i, ]
+    message(sprintf("  %s -> %s (%.0f%% confidence)%s%s",
+                    ch$Sample, ch$nearest_class, 100 * ch$confidence,
+                    if (isTRUE(ch$ambiguous)) " [ambiguous]" else "",
+                    if (isTRUE(ch$distant_from_reference))
+                      " [distant from reference]" else ""))
+  }
+
   csv <- file.path(output_dir, sprintf("reference_projection_%s.csv", dataset))
   write.csv(projected, csv, row.names = FALSE)
+  hints_csv <- file.path(output_dir,
+                         sprintf("reference_projection_class_hints_%s.csv", dataset))
+  write.csv(class_hints, hints_csv, row.names = FALSE)
   pdf <- plot_reference_projection(reference, projected, output_dir)
 
   message(sprintf("run_reference_projection: done — %d sample(s) projected onto '%s'.",
                   nrow(projected), dataset))
   # ref_meta (reference embedding coords + tumour groups + colours) is small
-  # (~1900 rows) and is saved alongside the projected query coords so the
-  # Shiny UI can draw the reference cloud without loading the 137 MB beta.
+  # (~1900 rows) and is saved alongside the projected query coords + class
+  # hints so the Shiny UI can render everything without the 137 MB beta.
   invisible(list(
-    dataset   = dataset,
-    projected = projected,
-    ref_meta  = reference$ref_meta,
-    csv       = csv,
-    pdf       = pdf
+    dataset     = dataset,
+    projected   = projected,
+    class_hints = class_hints,
+    ref_meta    = reference$ref_meta,
+    csv         = csv,
+    pdf         = pdf,
+    hints_csv   = hints_csv
   ))
 }

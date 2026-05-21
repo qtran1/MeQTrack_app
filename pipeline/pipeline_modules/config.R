@@ -126,7 +126,8 @@ default_config <- function() {
       enabled       = TRUE,
       dataset       = "COMET_1915",   # key into .REFERENCE_DATASETS
       reference_dir = "../reference",
-      perplexity    = 5
+      perplexity    = 5,
+      knn_k         = 25              # neighbours for the nearest-class diagnostic
     ),
 
     # Output

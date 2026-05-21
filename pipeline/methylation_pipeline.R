@@ -576,6 +576,7 @@ run_pipeline <- function(step) {
     rp_dataset       <- "COMET_1915"
     rp_reference_dir <- "../reference"
     rp_perplexity    <- 5
+    rp_knn_k         <- 25
 
     if (!is.null(config$reference_projection)) {
       if (!is.null(config$reference_projection$enabled))
@@ -586,6 +587,8 @@ run_pipeline <- function(step) {
         rp_reference_dir <- config$reference_projection$reference_dir
       if (!is.null(config$reference_projection$perplexity))
         rp_perplexity <- config$reference_projection$perplexity
+      if (!is.null(config$reference_projection$knn_k))
+        rp_knn_k <- config$reference_projection$knn_k
     }
 
     # cwd is the pipeline/ directory (set above), so a relative reference_dir
@@ -609,7 +612,8 @@ run_pipeline <- function(step) {
           dataset       = rp_dataset,
           reference_dir = rp_reference_dir,
           output_dir    = dirs$reference_projection,
-          perplexity    = rp_perplexity
+          perplexity    = rp_perplexity,
+          knn_k         = rp_knn_k
         ),
         error = function(e) {
           log_message(paste("Reference projection failed:", conditionMessage(e)),
