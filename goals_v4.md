@@ -147,8 +147,11 @@ reference. Deferred to v2.1.
   perplexity — flowing through `run_config.R` like the QC / dim-reduction
   knobs. **Phase 3 is now complete.**
 
-  **Still open:** the class-hint table in the HTML report (the report
-  half of P3-T4); then Phase 4 (packaging, caching, release).
+  The class-hint table is now also in the HTML report — a "Reference
+  Projection" section with the Class Hints table and the projection
+  plot (P3-T4 fully done).
+
+  **Still open:** Phase 4 (packaging, caching, release).
 
 ---
 
