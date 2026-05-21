@@ -54,6 +54,11 @@ dimred_module_ui <- function(id) {
           plotly::plotlyOutput(ns("refproj_plot"), height = "600px"),
           type = 7, color = COLORS$primary
         ))
+      ),
+      shiny::tags$h6("Per-sample class hints", class = "mt-4 mb-2"),
+      shinycssloaders::withSpinner(
+        DT::DTOutput(ns("refproj_table")),
+        type = 7, color = COLORS$primary
       )
     )
   )
@@ -160,7 +165,10 @@ dimred_module_server <- function(id, results) {
                        "samples in %d tumour groups. "),
                 rp$dataset, nrow(rp$ref_meta),
                 length(unique(rp$ref_meta$tumor_group))),
-        "Dark diamonds are your samples; the coloured cloud is the reference."
+        paste("Dark diamonds are your samples; the coloured cloud is the",
+              "reference. Samples with near-identical methylomes share",
+              "coordinates and overlap on the plot — the table below lists",
+              "every sample individually.")
       )
     })
 
@@ -193,6 +201,35 @@ dimred_module_server <- function(id, results) {
                          isTRUE(input$refproj_show_ref),
         class_filter   = input$refproj_classes
       )
+    })
+
+    output$refproj_table <- DT::renderDT({
+      r <- results()
+      if (is.null(r) || is.null(r$reference_projection)) return(NULL)
+      df <- refproj_table_df(r$reference_projection)
+      dt <- DT::datatable(
+        df,
+        rownames  = FALSE,
+        selection = "none",
+        class     = "stripe hover compact",
+        width     = "100%",
+        options   = list(
+          pageLength = 25,
+          scrollX    = TRUE,
+          autoWidth  = FALSE,
+          dom        = "ltip",
+          headerCallback = dt_header_tooltips(REFPROJ_COL_TOOLTIPS)
+        )
+      )
+      # Tint rows whose class hint is ambiguous so uncertain calls stand out.
+      if ("Ambiguous" %in% colnames(df)) {
+        dt <- DT::formatStyle(
+          dt, "Ambiguous", target = "row",
+          backgroundColor = DT::styleEqual(c("yes", ""),
+                                           c("#fff3cd", "#ffffff"))
+        )
+      }
+      dt
     })
   })
 }
@@ -462,6 +499,41 @@ scatter_reference_projection <- function(rp, show_reference = TRUE,
       legend = list(itemsizing = "constant")
     ) |>
     plotly_defaults()
+}
+
+# Plain-English tooltips for the per-sample class-hint table headers.
+REFPROJ_COL_TOOLTIPS <- list(
+  "Sample"        = "Your query sample.",
+  "t-SNE 1"       = "Projected t-SNE x-coordinate. Samples with near-identical methylomes share coordinates and overlap on the plot.",
+  "t-SNE 2"       = "Projected t-SNE y-coordinate.",
+  "Nearest class" = "Reference tumour group winning the k-NN vote around the projected point.",
+  "Confidence"    = "Fraction of the k nearest reference neighbours belonging to the nearest class.",
+  "Top classes"   = "Top reference groups among the k nearest neighbours, with vote share.",
+  "Ambiguous"     = "yes = no clear majority, or the top two classes are within 15 points — treat the hint with caution.",
+  "Distant"       = "yes = the sample landed far from any reference cluster; its methylome is unlike anything in the reference, so the hint is unreliable."
+)
+
+# Build the per-sample display table from a $reference_projection bundle:
+# the projected coordinates joined to the Phase 2 class hints. Every query
+# sample gets a row, so all samples are visible even when their markers
+# overlap on the scatter.
+refproj_table_df <- function(rp) {
+  proj <- as.data.frame(rp$projected)
+  base <- data.frame(
+    Sample    = proj$Sample,
+    `t-SNE 1` = round(proj$tSNE1, 2),
+    `t-SNE 2` = round(proj$tSNE2, 2),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+  ch <- rp$class_hints
+  if (is.null(ch)) return(base)            # run predates the Phase 2 diagnostic
+  ch <- ch[match(proj$Sample, ch$Sample), , drop = FALSE]
+  base$`Nearest class` <- ch$nearest_class
+  base$Confidence      <- sprintf("%.0f%%", 100 * ch$confidence)
+  base$`Top classes`   <- ch$top_classes
+  base$Ambiguous       <- ifelse(ch$ambiguous %in% TRUE, "yes", "")
+  base$Distant         <- ifelse(ch$distant_from_reference %in% TRUE, "yes", "")
+  base
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
