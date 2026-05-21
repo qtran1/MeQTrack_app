@@ -13,7 +13,7 @@
 #   umap            list(coords, sample_info, umap_object)  or NULL
 #   hclust          list(hclust, distance, method)          or NULL
 #   cnv             list(segments, sample_results, ...)     or NULL
-#   reference_projection  list(dataset, projected, ref_meta) or NULL
+#   reference_projection  list(dataset, label, projected, ref_meta, ...) or NULL
 #   metadata_cols   character  — samplesheet columns eligible as color
 #                                variables (Sample_Group, Diagnosis, etc.)
 #   run_url_base    character  — web path (served via addResourcePath) from

@@ -348,8 +348,9 @@ rp_dir <- if (!is.null(odirs)) odirs$reference_projection else NULL
 ```
 
 ```{r refproj_summary, eval=has_rp}
+rp_name <- if (!is.null(rp$label)) rp$label else rp$dataset
 cat(sprintf("Query samples projected onto the **%s** reference (%s reference samples). Each sample is assigned its nearest reference tumour group by a k-NN vote in the embedding.\n\n",
-            rp$dataset,
+            rp_name,
             if (!is.null(rp$ref_meta)) nrow(rp$ref_meta) else "?"))
 ```
 
@@ -541,7 +542,9 @@ generate_text_report <- function(qc_results, dim_reduction, cnv_data,
     report_lines <- c(report_lines,
       "Reference Projection Summary",
       "---------------------------",
-      paste("Reference dataset:", reference_projection$dataset),
+      paste("Reference dataset:",
+            if (!is.null(reference_projection$label))
+              reference_projection$label else reference_projection$dataset),
       paste("Samples projected:", nrow(ch)),
       ""
     )

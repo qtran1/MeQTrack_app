@@ -234,6 +234,9 @@ bridge_kill <- function(handle) {
   if (!is.null(parameters$cnv.threshold)) {
     cfg$cnv$threshold <- parameters$cnv.threshold
   }
+  if (!is.null(parameters$refproj.dataset)) {
+    cfg$reference_projection$dataset <- parameters$refproj.dataset
+  }
   if (!is.null(parameters$refproj.knn_k)) {
     cfg$reference_projection$knn_k <- parameters$refproj.knn_k
   }

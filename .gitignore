@@ -24,12 +24,13 @@ renv/python/
 # If you want it in the repo, set up Git LFS and remove this line.
 pipeline/data/yamapData_*.tar.gz
 
-# Reference β-matrices for v2.0.0 projection — the CSVs are 845 MB / 345 MB
-# and the compact .rds cache is still ~137 MB, all far over GitHub's 100 MB
-# per-file limit. Distributed separately (Git LFS or download-on-first-use)
-# — see goals_v4.md Phase 0. The .rds is regenerated from the CSV on first
-# use by reference_projection.R. The small embedding .RData files and the
-# metadata CSV in reference/ ARE committed.
+# Reference β-matrices for projection — large binary data, far over GitHub's
+# 100 MB per-file limit. Each dataset ships as a pre-built .rds (the
+# canonical format: COMET ~137 MB, Capper ~211 MB). A CSV is only an
+# optional on-ramp (reference_projection.R parses + caches it as .rds) and
+# is larger still. All are distributed separately (Git LFS or
+# download-on-first-use) — see goals_v4.md Phase 0. The small embedding
+# .RData files and the metadata CSVs in reference/ ARE committed.
 reference/beta_*
 
 # Pipeline run outputs (local, machine-specific)

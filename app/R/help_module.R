@@ -135,8 +135,9 @@ help_module_ui <- function(id) {
         shiny::tags$tr(
           shiny::tags$td(shiny::tags$strong("4. Reference projection")),
           shiny::tags$td(
-            "Projects your samples onto the bundled COMET reference t-SNE ",
-            "embedding and assigns each a nearest reference tumour group."
+            "Projects your samples onto a chosen reference t-SNE embedding ",
+            "(COMET or Capper) and assigns each a nearest reference tumour ",
+            "group."
           )
         ),
         shiny::tags$tr(
@@ -193,9 +194,12 @@ help_module_ui <- function(id) {
     shiny::p(
       "The ", shiny::tags$em("Reference projection"), " sub-tab (under ",
       shiny::tags$em("Dim. reduction"), ") places your samples onto a ",
-      "pre-built reference cohort — the bundled COMET pediatric ",
-      "solid-tumour set (~1,900 labelled methylomes) — and reports, per ",
-      "sample, the nearest reference tumour group as a diagnostic hint."
+      "pre-built reference cohort and reports, per sample, the nearest ",
+      "reference tumour group as a diagnostic hint. Choose which reference ",
+      "to project onto with ", shiny::tags$em("Reference dataset"),
+      " in the Run tab's Settings — the bundled COMET paediatric ",
+      "solid-tumour set (~1,900 labelled methylomes) or the Capper et al. ",
+      "CNS-tumour reference (~2,800 methylomes, GSE90496)."
     ),
     shiny::tags$ul(
       shiny::tags$li(
@@ -236,7 +240,7 @@ help_module_ui <- function(id) {
     # --- Settings ------------------------------------------------------
     shiny::h3("Settings (tunable parameters)"),
     shiny::p(
-      "Eight knobs on the Run tab. Defaults match ",
+      "Nine controls on the Run tab. Defaults match ",
       shiny::tags$code("pipeline_modules/config.R$default_config"),
       "; overrides apply to the next launch only and are persisted in the ",
       "run's ", shiny::tags$code("run_manifest.json"),
@@ -262,6 +266,10 @@ help_module_ui <- function(id) {
       shiny::tags$li(shiny::tags$strong("CNV loss threshold"),
         " (default -0.20) — seg.mean cutoff below which a segment is called a loss; ",
         "enter as a negative value."),
+      shiny::tags$li(shiny::tags$strong("Reference dataset"),
+        " (default COMET) — which labelled reference cohort to project ",
+        "onto: the COMET paediatric solid-tumour set or the Capper ",
+        "CNS-tumour reference (GSE90496)."),
       shiny::tags$li(shiny::tags$strong("Nearest-class k"),
         " (default 25) — reference neighbours that vote on each projected ",
         "sample's tumour class."),
