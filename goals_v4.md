@@ -117,7 +117,20 @@ reference. Deferred to v2.1.
   `--output` now resolve relative to the invocation directory rather than
   the internal `pipeline/` `setwd()`.
 
-  **Next: Phase 2** (nearest-class diagnostic), which also unblocks P3-T4.
+- **Phase 2 — nearest-class diagnostic done.** `nearest_reference_class()`
+  in `reference_projection.R` runs a k-NN vote (k = 25, configurable via
+  `config$reference_projection$knn_k`) of each projected query sample
+  against the labelled reference cloud — emitting the nearest class with a
+  confidence, a runner-up, an `ambiguous` flag (no majority / close top
+  two), a `distant_from_reference` flag (sample unlike anything in the
+  reference), and a `top_classes` summary string. The orchestrator writes
+  `reference_projection_class_hints_<dataset>.csv` and carries
+  `class_hints` in the saved `rp_result` (P2-T1 / T2 / T3). Not done:
+  recording the reference dataset/version in `run_manifest.json` — better
+  handled in the bridge (Phase 4).
+
+  **Next:** P3-T4 — surface the class-hint table in the UI projection
+  panel and the HTML report (now unblocked by Phase 2).
 
 ---
 
