@@ -436,7 +436,7 @@ scatter_reference_projection <- function(rp, show_reference = TRUE,
         data   = rm_, x = ~tSNE1, y = ~tSNE2,
         color  = ~tumor_group,
         colors = .refproj_color_map(rp$ref_meta),
-        marker = list(size = 6, opacity = 0.45, line = list(width = 0)),
+        marker = list(size = 10, opacity = 0.45, line = list(width = 0)),
         text   = ~tumor_group,
         hovertemplate = "Reference: %{text}<extra></extra>"
       )
@@ -447,9 +447,9 @@ scatter_reference_projection <- function(rp, show_reference = TRUE,
     plotly::add_markers(
       data = proj, x = ~tSNE1, y = ~tSNE2,
       name = "Your samples",
-      marker = list(size = 13, symbol = "diamond",
+      marker = list(size = 8, symbol = "diamond",
                     color = COLORS$ink_900,
-                    line = list(width = 1.6, color = "#ffffff")),
+                    line = list(width = 1.2, color = "#ffffff")),
       text = ~Sample,
       hovertemplate = paste0(
         "<b>%{text}</b><br>t-SNE 1: %{x:.2f}<br>",
