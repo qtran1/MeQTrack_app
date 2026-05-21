@@ -169,6 +169,43 @@ preprocess_query_swan <- function(samplesheet) {
 # Harmonise a query beta matrix to the reference probe set
 # ---------------------------------------------------------------------------
 
+#' Normalise query probe IDs to plain CpG IDs.
+#'
+#' EPICv2 manifest probe IDs carry a design suffix (e.g. cg00000029_TC21),
+#' while the reference embeddings were built on plain 450K/EPIC IDs
+#' (cg00000029). Without this step an EPICv2 query intersects almost none
+#' of the reference probes and collapses to the reference mean. We strip
+#' the suffix and, where EPICv2 ships several replicate probes for one CpG,
+#' average them per CpG. A no-op for 450K / EPIC v1 (their IDs have no
+#' suffix), so it is safe to call unconditionally.
+#'
+#' @param beta Query beta matrix, probes x samples.
+#' @return Beta matrix with plain-CpG rownames; replicate CpGs collapsed.
+.normalize_probe_ids <- function(beta) {
+  beta <- as.matrix(beta)
+  pid  <- rownames(beta)
+  base <- sub("_.*$", "", pid)
+  if (identical(base, pid)) return(beta)            # no suffixes — 450K / EPIC v1
+
+  n_suffixed <- sum(base != pid)
+  if (anyDuplicated(base) == 0L) {
+    rownames(beta) <- base
+    message(sprintf(
+      "harmonize_query: EPICv2-style probe IDs — stripped suffix from %d probe(s).",
+      n_suffixed))
+    return(beta)
+  }
+  # EPICv2 ships replicate probes for some CpGs — average them per CpG.
+  sums   <- rowsum(beta, base, na.rm = TRUE)
+  counts <- rowsum(1 * !is.na(beta), base)
+  counts[counts == 0] <- NA_real_                   # all-NA group -> NA, not 0/0
+  out <- sums / counts
+  message(sprintf(
+    "harmonize_query: EPICv2-style probe IDs — stripped suffix from %d probe(s); collapsed %d replicate row(s) into per-CpG means (%d -> %d probes).",
+    n_suffixed, nrow(beta) - nrow(out), nrow(beta), nrow(out)))
+  out
+}
+
 #' Reshape a query beta matrix to exactly the reference probe set.
 #'
 #' snifter::project() requires \code{ncol(new) == ncol(old)} with matching
@@ -176,12 +213,14 @@ preprocess_query_swan <- function(samplesheet) {
 #' every reference probe, in the reference's order. Probes the query lacks,
 #' and any residual NA values, are imputed with the reference per-probe mean
 #' (a neutral choice that does not pull the sample toward any class).
+#' Query probe IDs are first normalised by \code{.normalize_probe_ids()} so
+#' EPICv2 arrays match the 450K/EPIC-style reference probe names.
 #'
 #' @param query_beta Query beta matrix, probes x samples.
 #' @param ref_beta   Reference beta matrix, probes x samples.
 #' @return Query beta matrix, reference-probes x query-samples.
 harmonize_query <- function(query_beta, ref_beta) {
-  query_beta <- as.matrix(query_beta)
+  query_beta <- .normalize_probe_ids(as.matrix(query_beta))
   ref_probes <- rownames(ref_beta)
 
   common  <- intersect(ref_probes, rownames(query_beta))
