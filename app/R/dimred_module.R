@@ -475,7 +475,7 @@ scatter_reference_projection <- function(rp, show_reference = TRUE,
         colors = .refproj_color_map(rp$ref_meta),
         # Each reference point gets a thin grey border (matches the static
         # PDF's grey75 outline), so dense same-colour clusters stay legible.
-        marker = list(size = 10, opacity = 0.45,
+        marker = list(size = 10, opacity = 0.7,
                       line = list(width = 1, color = "#BFBFBF")),
         text   = ~tumor_group,
         hovertemplate = "Reference: %{text}<extra></extra>"
