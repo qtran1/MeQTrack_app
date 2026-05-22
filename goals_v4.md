@@ -10,10 +10,12 @@ the reference-projection feature. v2.0.0 is one capability, not a
 basket of small improvements. Resist the urge to fold unrelated work
 into this scope.
 
-**Status — SHIPPED.** v2.0.0 was released and tagged
-(`MEQTRACK_VERSION = "2.0.0"` in `pipeline/methylation_pipeline.R`),
-followed by the v2.0.1 patch. All five phases below (0–4) are complete.
-v2.1 work has since continued on `main` — see *Scope discipline*.
+**Status — SHIPPED.** v2.0.0 was released and tagged, followed by the
+v2.0.1 patch and then **v2.1.0** (tagged `v2.1.0`,
+`MEQTRACK_VERSION = "2.1.0"` in `pipeline/methylation_pipeline.R`). All
+five phases below (0–4) are complete. v2.1.0 added the Capper and
+sarcoma reference datasets and the dataset picker — see *Scope
+discipline*.
 
 ---
 
@@ -261,20 +263,20 @@ controllable in the app.
 Reference projection is the only marquee capability of v2.0.0, shipping
 the single 1915-sample COMET reference.
 
-**v2.1 — done since v2.0.0:** the UI **reference-dataset selector**
-(skipped in Phase 3 while only one dataset existed) and two additional
-reference datasets — the **Capper** CNS-tumour classifier (GSE90496,
-2801 samples) and a **sarcoma** classifier (GSE140686, 1077 samples).
-Each was registered in the `.REFERENCE_DATASETS` table in
+**v2.1.0 — RELEASED (tagged `v2.1.0`):** the UI **reference-dataset
+selector** (skipped in Phase 3 while only one dataset existed) and two
+additional reference datasets — the **Capper** CNS-tumour classifier
+(GSE90496, 2801 samples) and a **sarcoma** classifier (GSE140686, 1077
+samples). Each was registered in the `.REFERENCE_DATASETS` table in
 `reference_projection.R`, which needs three artefacts per reference:
 1. a trained `snifter` t-SNE embedding (`.RData`);
 2. the training β-matrix it was built on (the `old` data for projection);
 3. a `Sentrix_ID → tumour-class` metadata table.
 
-Still deferred to v2.1+: the 4685-sample full-COMET set (its embedding's
-rownames must first be restored from the β-matrix column order). Also
-deferred: UMAP reference projection, alternate projection methods, batch
-correction.
+Still deferred beyond v2.1.0: the 4685-sample full-COMET set (its
+embedding's rownames must first be restored from the β-matrix column
+order). Also deferred: UMAP reference projection, alternate projection
+methods, batch correction.
 
 ## Open questions still to resolve
 
@@ -285,7 +287,7 @@ correction.
   shading projected points by k-NN distance).
 - Whether the 4685-sample COMET set is still worth adding as a
   selectable reference (its embedding's rownames must first be restored
-  from the β-matrix column order) — v2.1 added Capper and sarcoma but
+  from the β-matrix column order) — v2.1.0 added Capper and sarcoma but
   not this one.
 - `snifter` pulls in a `basilisk`-managed Python env (openTSNE) that
   provisions on first use — needs network and several minutes. Resolved
