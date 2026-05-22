@@ -30,8 +30,9 @@
 # reference_dir and the metadata columns carrying the Sentrix ID, the
 # tumour-class label, and the per-class plotting colour. v2.0.0 shipped the
 # COMET primary-diagnostic set; v2.1 adds the Capper et al. CNS-tumour
-# reference (GSE90496). The full 4685-sample COMET set is still a candidate
-# and would be added here the same way.
+# reference (GSE90496) and the Koelsche et al. sarcoma reference (GSE140686).
+# The full 4685-sample COMET set is still a candidate and would be added here
+# the same way.
 #
 # The reference beta matrix ships pre-built as a compact .rds (`beta_rds`) —
 # the canonical format for every dataset (smaller and far faster to load
@@ -70,6 +71,23 @@
     metadata    = "GSE90496_MC_MCF_color_labels_key.csv",
     sentrix_col = "Sample",
     class_col   = "meth.class",
+    color_col   = "col"
+  ),
+
+  # Koelsche et al. (2021) sarcoma methylation reference, GSE140686 — 1077
+  # tumours across 65 sarcoma methylation classes. The metadata is per-sample
+  # (one row per reference tumour): `IDAT` carries the Sentrix ID matching
+  # the embedding, `Meth_Class` the short class code (e.g. RMS-ALV), and
+  # `col` its hex plotting colour. The sibling `Methylation_Class_Name`
+  # column holds the same classes spelled out in full.
+  Sarcoma_GSE140686 = list(
+    label       = "Koelsche et al. sarcoma reference (1077 samples, GSE140686)",
+    embedding   = "tSNE_embedding_GSE140686_top10K.RData",
+    beta_rds    = "beta_GSE140686_1077Sarcoma_top10K.rds",
+    beta_csv    = NA_character_,
+    metadata    = "GSE140686_sarcoma_methylation_labels.csv",
+    sentrix_col = "IDAT",
+    class_col   = "Meth_Class",
     color_col   = "col"
   )
 )
