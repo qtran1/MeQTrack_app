@@ -390,7 +390,7 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
     geom_point(data = rm_,
                aes(x = tSNE1, y = tSNE2, fill = tumor_group),
                shape = 21, size = 3.2, stroke = 0.1,
-               colour = "grey75", alpha = 0.55) +
+               colour = "grey75", alpha = 0.7) +
     scale_fill_manual(values = col_map, name = "Reference\ntumour group") +
     guides(fill = guide_legend(ncol = legend_cols)) +
     geom_point(data = projected,
