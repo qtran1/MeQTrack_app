@@ -136,8 +136,8 @@ help_module_ui <- function(id) {
           shiny::tags$td(shiny::tags$strong("4. Reference projection")),
           shiny::tags$td(
             "Projects your samples onto a chosen reference t-SNE embedding ",
-            "(COMET or Capper) and assigns each a nearest reference tumour ",
-            "group."
+            "(COMET, Capper, or the GSE140686 sarcoma set) and assigns each ",
+            "a nearest reference tumour group."
           )
         ),
         shiny::tags$tr(
@@ -198,8 +198,9 @@ help_module_ui <- function(id) {
       "reference tumour group as a diagnostic hint. Choose which reference ",
       "to project onto with ", shiny::tags$em("Reference dataset"),
       " in the Run tab's Settings — the bundled COMET paediatric ",
-      "solid-tumour set (~1,900 labelled methylomes) or the Capper et al. ",
-      "CNS-tumour reference (~2,800 methylomes, GSE90496)."
+      "solid-tumour set (~1,900 labelled methylomes), the Capper et al. ",
+      "CNS-tumour reference (~2,800 methylomes, GSE90496), or the Koelsche ",
+      "et al. sarcoma reference (1,077 methylomes, GSE140686)."
     ),
     shiny::tags$ul(
       shiny::tags$li(
@@ -268,8 +269,9 @@ help_module_ui <- function(id) {
         "enter as a negative value."),
       shiny::tags$li(shiny::tags$strong("Reference dataset"),
         " (default COMET) — which labelled reference cohort to project ",
-        "onto: the COMET paediatric solid-tumour set or the Capper ",
-        "CNS-tumour reference (GSE90496)."),
+        "onto: the COMET paediatric solid-tumour set, the Capper ",
+        "CNS-tumour reference (GSE90496), or the GSE140686 sarcoma ",
+        "reference."),
       shiny::tags$li(shiny::tags$strong("Nearest-class k"),
         " (default 25) — reference neighbours that vote on each projected ",
         "sample's tumour class."),

@@ -4,9 +4,9 @@
 # What goes in:
 #   app/            full Shiny app
 #   pipeline/       pipeline R code, example data, yamapData_*.tar.gz
-#   reference/      COMET + Capper reference embeddings, metadata, and
-#                   beta .rds files (the multi-hundred-MB source CSVs
-#                   are excluded)
+#   reference/      COMET + Capper + GSE140686 sarcoma reference embeddings,
+#                   metadata, and beta .rds files (the multi-hundred-MB
+#                   source CSVs are excluded)
 #   renv.lock       package lockfile
 #   renv/           only activate.R, settings.json, .gitignore (NOT library/)
 #   .Rprofile       activates renv on R startup
@@ -63,6 +63,7 @@ fi
 ref_betas=(
   "reference/beta_1915_COMET.rds"
   "reference/beta_GSE90496_top10K.rds"
+  "reference/beta_GSE140686_1077Sarcoma_top10K.rds"
 )
 for ref_beta in "${ref_betas[@]}"; do
   if [ ! -f "${ref_beta}" ]; then
@@ -168,6 +169,9 @@ required=(
   "reference/beta_GSE90496_top10K.rds"
   "reference/tSNE_embedding_GSE90496_top10K.RData"
   "reference/GSE90496_MC_MCF_color_labels_key.csv"
+  "reference/beta_GSE140686_1077Sarcoma_top10K.rds"
+  "reference/tSNE_embedding_GSE140686_top10K.RData"
+  "reference/GSE140686_sarcoma_methylation_labels.csv"
   "renv.lock"
   "renv/activate.R"
   ".Rprofile"

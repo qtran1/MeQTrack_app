@@ -179,7 +179,8 @@ settings_module_ui <- function(id) {
                 "beta matrix and tumour-class labels — the projection and",
                 "the nearest-class hints are computed against the one",
                 "picked here. COMET is a paediatric solid-tumour set;",
-                "Capper is the CNS-tumour reference (GSE90496)."
+                "Capper is the CNS-tumour reference (GSE90496); GSE140686",
+                "is the sarcoma reference."
               ),
               placement = "right"
             )
