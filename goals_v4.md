@@ -10,12 +10,10 @@ the reference-projection feature. v2.0.0 is one capability, not a
 basket of small improvements. Resist the urge to fold unrelated work
 into this scope.
 
-When v2.0.0 ships, bump `MEQTRACK_VERSION` in
-`pipeline/methylation_pipeline.R` to `"2.0.0"`.
-
-Work happens on the `v2.0.0-reference-projection` branch; `main` stays
-free for v1.1.x patches. Merge `main` into the branch periodically to
-absorb those patches.
+**Status — SHIPPED.** v2.0.0 was released and tagged
+(`MEQTRACK_VERSION = "2.0.0"` in `pipeline/methylation_pipeline.R`),
+followed by the v2.0.1 patch. All five phases below (0–4) are complete.
+v2.1 work has since continued on `main` — see *Scope discipline*.
 
 ---
 
@@ -92,9 +90,12 @@ reference. Deferred to v2.1.
 
 ## Progress
 
-- **Phase 0** — mostly done. Reference assets staged in `reference/` and
-  validated (alignment confirmed; COMET identified). Open: the β-matrix
-  distribution decision (P0-T3) and the workspace cache layout (P0-T4).
+- **Phase 0 — COMPLETE.** Reference assets staged in `reference/` and
+  validated (alignment confirmed; COMET identified). Distribution
+  decided (P0-T3 / P0-T4): the compact `.rds` β-matrices are gitignored
+  and bundled into the release zip by `build_release.sh`; embeddings and
+  metadata are committed. Assets ship inside the zip — no separate
+  workspace cache.
 - **Phase 1 — COMPLETE.** `pipeline/pipeline_modules/reference_projection.R`
   written and wired into `methylation_pipeline.R` as
   `--step reference_projection`, with `config$reference_projection$*`
@@ -151,17 +152,13 @@ reference. Deferred to v2.1.
   Projection" section with the Class Hints table and the projection
   plot (P3-T4 fully done).
 
-- **Phase 4 — packaging done; release pending sign-off.**
-  `build_release.sh` now bundles `reference/` into the zip (the compact
-  `.rds` β-matrix + embeddings + metadata; the multi-hundred-MB source
-  CSVs excluded), with a preflight check mirroring yamapData's.
-  `MEQTRACK_VERSION` is bumped to `2.0.0`; the Help tab and QUICKSTART
-  document the feature. The release zip builds at ~560 MB / 93 files
-  with the reference assets verified inside.
-
-  **Remaining:** P4-GATE — a fresh-install smoke test on a clean
-  machine — then merge `v2.0.0-reference-projection` → `main` and tag
-  v2.0.0.
+- **Phase 4 — COMPLETE.** `build_release.sh` bundles `reference/` into
+  the zip (the compact `.rds` β-matrix + embeddings + metadata; the
+  multi-hundred-MB source CSVs excluded), with a preflight check
+  mirroring yamapData's. `MEQTRACK_VERSION` is `2.0.0`; the Help tab and
+  QUICKSTART document the feature. P4-GATE passed: the
+  `v2.0.0-reference-projection` branch was merged to `main` and tagged
+  **v2.0.0**. A **v2.0.1** patch followed.
 
 ---
 
@@ -264,20 +261,20 @@ controllable in the app.
 Reference projection is the only marquee capability of v2.0.0, shipping
 the single 1915-sample COMET reference.
 
-Deferred to v2.1+ — **additional reference datasets**: the 4685-sample
-full-COMET set, the **Capper** CNS-tumour classifier, and a **sarcoma**
-classifier (the user is sourcing the latter two). The
-`.REFERENCE_DATASETS` registry in `reference_projection.R` already
-supports them — each new reference needs three artefacts:
+**v2.1 — done since v2.0.0:** the UI **reference-dataset selector**
+(skipped in Phase 3 while only one dataset existed) and two additional
+reference datasets — the **Capper** CNS-tumour classifier (GSE90496,
+2801 samples) and a **sarcoma** classifier (GSE140686, 1077 samples).
+Each was registered in the `.REFERENCE_DATASETS` table in
+`reference_projection.R`, which needs three artefacts per reference:
 1. a trained `snifter` t-SNE embedding (`.RData`);
 2. the training β-matrix it was built on (the `old` data for projection);
 3. a `Sentrix_ID → tumour-class` metadata table.
-If only raw data is found, the embedding still has to be trained
-(`snifter::fitsne`). v2.1 also adds the UI **reference-dataset
-selector** (skipped in Phase 3 while only one dataset existed).
 
-Also deferred to v2.1+: UMAP reference projection, alternate projection
-methods, batch correction.
+Still deferred to v2.1+: the 4685-sample full-COMET set (its embedding's
+rownames must first be restored from the β-matrix column order). Also
+deferred: UMAP reference projection, alternate projection methods, batch
+correction.
 
 ## Open questions still to resolve
 
@@ -286,10 +283,11 @@ methods, batch correction.
   match; should a very low match instead hard-refuse the projection?
 - Confidence visualization in the UI beyond the hint table (e.g.
   shading projected points by k-NN distance).
-- Whether the 4685-sample COMET set is added in v2.1 as a second
+- Whether the 4685-sample COMET set is still worth adding as a
   selectable reference (its embedding's rownames must first be restored
-  from the β-matrix column order).
+  from the β-matrix column order) — v2.1 added Capper and sarcoma but
+  not this one.
 - `snifter` pulls in a `basilisk`-managed Python env (openTSNE) that
-  provisions on first use — needs network and several minutes. Its
-  impact on the release install path must be handled in Phase 4 (echoes
-  the v1.1.x install-hardening pain).
+  provisions on first use — needs network and several minutes. Resolved
+  for v2.0.0: the env provisions on first run and the Help tab warns the
+  first projection is slow (echoes the v1.1.x install-hardening pain).
