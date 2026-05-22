@@ -374,12 +374,25 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
   col_map <- tapply(rm_$color, rm_$tumor_group, function(x) x[1])
   col_map <- .safe_color_map(col_map)
 
+  # A long tumour-group legend wraps into several columns and eats into the
+  # plot panel, squishing the t-SNE map. COMET (16 groups) fits one column;
+  # GSE140686 (65) and GSE90496 (91) need more. Cap each legend column at
+  # ~32 entries, then widen the page by one column's worth for each legend
+  # column beyond the first so the map keeps a stable, roughly-square size.
+  # Multi-column datasets also get a taller page (10 in vs 8) so the wider
+  # canvas stays proportional rather than letterboxed.
+  n_groups    <- nlevels(rm_$tumor_group)
+  legend_cols <- max(1L, ceiling(n_groups / 32))
+  plot_width  <- 10 + 3 * (legend_cols - 1L)
+  plot_height <- if (legend_cols > 1L) 10 else 8
+
   p <- ggplot() +
     geom_point(data = rm_,
                aes(x = tSNE1, y = tSNE2, fill = tumor_group),
                shape = 21, size = 3.2, stroke = 0.1,
                colour = "grey75", alpha = 0.55) +
     scale_fill_manual(values = col_map, name = "Reference\ntumour group") +
+    guides(fill = guide_legend(ncol = legend_cols)) +
     geom_point(data = projected,
                aes(x = tSNE1, y = tSNE2),
                shape = 23, size = 2.5, stroke = 0.6,
@@ -394,7 +407,7 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
     theme(legend.text = element_text(size = rel(0.7)),
           panel.grid.minor = element_blank())
 
-  ggsave(file, p, width = 10, height = 8)
+  ggsave(file, p, width = plot_width, height = plot_height)
   message("plot_reference_projection: wrote ", file)
   invisible(file)
 }
