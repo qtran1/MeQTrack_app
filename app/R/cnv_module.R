@@ -17,6 +17,11 @@
 cnv_module_ui <- function(id) {
   ns <- shiny::NS(id)
   bslib::navset_tab(
+    # id lets the server know which sub-tab is active, so the Frequency
+    # PDF iframe can be mounted only when its panel is actually visible
+    # (see frequency_frame: embedding it while hidden makes Chrome's PDF
+    # viewer fit to a zero-width box and render the plot tiny).
+    id = ns("cnv_tabs"),
     bslib::nav_panel(
       "Per-sample",
       shiny::fluidRow(
@@ -126,6 +131,14 @@ cnv_module_server <- function(id, results) {
         return(shiny::div(class = "alert alert-secondary",
                           "No completed run yet."))
       }
+      # Mount the PDF iframe only while the Frequency sub-tab is visible.
+      # Chrome's embedded PDF viewer fits the page to the iframe width at
+      # load time and never re-fits on resize; if the iframe is created
+      # while this panel is hidden (display:none — e.g. when a per-step CNV
+      # run completes while the user is on the Run tab) it fits to a
+      # zero-width box and the plot shows up tiny. Deferring the mount until
+      # the tab is shown guarantees the viewer sees the real width.
+      if (!identical(input$cnv_tabs, "Frequency")) return(NULL)
       rel <- "figures/cnv/cnv_frequency_plot.pdf"
       disk <- file.path(r$run_dir, rel)
       if (!file.exists(disk)) {
