@@ -122,11 +122,14 @@ cran_packages <- c(
   "shiny", "bslib", "shinyFiles", "shinycssloaders",
   "promises", "future", "callr",
   "ggdendro", "jsonlite",
-  # Needed for the conumee2 GitHub install (supports `subdir = ...`).
-  # We use devtools to match the install incantation that's been verified
-  # to work on the target laptops:
-  #   devtools::install_github("hovestadtlab/conumee2", subdir = "conumee2")
-  "devtools"
+  # Needed for the conumee2 GitHub install (supports `subdir = ...`):
+  #   remotes::install_github("hovestadtlab/conumee2", subdir = "conumee2")
+  # remotes (not devtools) is the actual install_github workhorse: it has
+  # almost no dependencies and a binary is always available. devtools merely
+  # forwards to remotes and now loads it lazily via check_installed(), so
+  # installing devtools alone leaves remotes missing and install_github fails
+  # with: 'The package "remotes" is required.'
+  "remotes"
 )
 
 message("Installing CRAN packages (may take a while on first run)...")
@@ -158,7 +161,7 @@ bioc_packages <- c(
   "DMRcate", "GenomicRanges", "sesame", "Gviz",
   # conumee2 transitive deps. conumee2 is installed from GitHub below
   # and its source build needs methylumi to load (methylumi in turn
-  # requires FDb.InfiniumMethylation.hg19). devtools::install_github
+  # requires FDb.InfiniumMethylation.hg19). remotes::install_github
   # doesn't reliably resolve these via BiocManager — easier to install
   # them explicitly here so they're already in the renv library when
   # conumee2 is built.
@@ -227,9 +230,8 @@ if (length(data_only_missing) > 0) {
 
 # conumee2: not in every Bioc release. Try Bioc first, fall back to GitHub.
 # The GitHub repo hosts the package inside a `conumee2/` subdirectory, so
-# we use devtools::install_github(subdir=) rather than renv::install(), which
-# would look for DESCRIPTION at the repo root and fail. devtools is the
-# install path that's been verified to work on the target laptops.
+# we use remotes::install_github(subdir=) rather than renv::install(), which
+# would look for DESCRIPTION at the repo root and fail.
 if (!requireNamespace("conumee2", quietly = TRUE)) {
   message("Installing conumee2 (Bioc first, GitHub fallback)...")
   bioc_ok <- tryCatch({
@@ -244,16 +246,16 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
     )
     message("conumee2 not in Bioc ", bioc_label,
             "; installing from GitHub (hovestadtlab/conumee2, subdir=conumee2)...")
-    # devtools is in the CRAN list above; this is a belt-and-suspenders
+    # remotes is in the CRAN list above; this is a belt-and-suspenders
     # install in case the CRAN step skipped it for any reason. Same
     # PPM-then-CRAN fallback chain as the bulk install.
-    if (!requireNamespace("devtools", quietly = TRUE)) {
-      install.packages("devtools", type = "binary", repos = .cran_repos)
+    if (!requireNamespace("remotes", quietly = TRUE)) {
+      install.packages("remotes", type = "binary", repos = .cran_repos)
     }
-    devtools::install_github("hovestadtlab/conumee2",
-                             subdir = "conumee2",
-                             upgrade = "never")
-    # devtools::install_github can warn and return without actually installing
+    remotes::install_github("hovestadtlab/conumee2",
+                            subdir = "conumee2",
+                            upgrade = "never")
+    # remotes::install_github can warn and return without actually installing
     # (e.g. when the host has no git, the GitHub API rate-limits, or the
     # tarball download fails partway). Verify the install landed; the final
     # post-install check at the end of setup.R catches this too, but failing
@@ -261,7 +263,7 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
     if (!requireNamespace("conumee2", quietly = TRUE)) {
       stop(
         "conumee2 GitHub fallback did not deliver the package to the renv ",
-        "library. Check the messages above for the underlying devtools/git ",
+        "library. Check the messages above for the underlying remotes/git ",
         "error (no network, missing git, GitHub rate limit, etc.) and re-run ",
         "setup.R after fixing it."
       )
