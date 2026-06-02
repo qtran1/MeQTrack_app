@@ -116,14 +116,22 @@ ui <- bslib::page_navbar(
   bslib::nav_panel(
     title = "Run",
     icon = icon("play"),
-    bslib::card(
-      bslib::card_header("Settings"),
-      bslib::card_body(settings_ui, fillable = FALSE)
+    # Settings and the pipeline controls/stages sit side by side so both
+    # stay visible without scrolling; the log + actions span full width
+    # below. layout_columns stacks the columns on narrow screens.
+    bslib::layout_columns(
+      col_widths = c(7, 5),
+      bslib::card(
+        bslib::card_header("Settings"),
+        bslib::card_body(settings_ui, fillable = FALSE)
+      ),
+      bslib::card(
+        bslib::card_header("Pipeline run"),
+        bslib::card_body(run_ui$controls, fillable = FALSE)
+      )
     ),
-    bslib::card(
-      bslib::card_header("Pipeline run"),
-      bslib::card_body(run_ui$main, fillable = FALSE)
-    )
+    run_ui$log,
+    run_ui$actions
   ),
   # -----------------------------------------------------------------
   # Past runs library (Wave 6 Theme 6b)
