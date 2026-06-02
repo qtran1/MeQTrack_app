@@ -31,8 +31,6 @@
 # tumour-class label, and the per-class plotting colour. v2.0.0 shipped the
 # COMET primary-diagnostic set; v2.1 adds the Capper et al. CNS-tumour
 # reference (GSE90496) and the Koelsche et al. sarcoma reference (GSE140686).
-# The full 4685-sample COMET set is still a candidate and would be added here
-# the same way.
 #
 # The reference beta matrix ships pre-built as a compact .rds (`beta_rds`) —
 # the canonical format for every dataset (smaller and far faster to load
@@ -118,8 +116,7 @@ load_reference <- function(dataset = "COMET_1915", reference_dir = "reference") 
   embedding <- get(ls(ee)[1], envir = ee)
   if (is.null(rownames(embedding))) {
     stop("Reference embedding '", dataset, "' has no rownames — cannot map ",
-         "rows to samples. (See goals_v4.md: the 4685-sample embedding has ",
-         "this problem; the 1915 set does not.)")
+         "rows to samples.")
   }
 
   # --- reference beta matrix ---
