@@ -18,7 +18,8 @@
 #   handle in an ExtendedTask without changing the UI.
 #
 # Public exports:
-#   run_controller_ui(id)                list of UI fragments (main / header)
+#   run_controller_ui(id)                list of UI fragments
+#                                        (controls / log / actions / header)
 #   run_controller_server(id, ss_state, workspace, project_root_)
 #     -> reactive list(state, stage, run_dir, exit_code)   (for header badge)
 # ---------------------------------------------------------------------------
@@ -85,8 +86,9 @@ STEP_PREREQS <- list(
 run_controller_ui <- function(id) {
   ns <- shiny::NS(id)
   list(
-    # Main content for the Run tab.
-    main = shiny::tagList(
+    # Controls + stage progress — meant to sit beside the Settings card in
+    # the Run tab (app.R composes the two-column layout).
+    controls = shiny::tagList(
       shiny::div(
         class = "d-flex gap-2 align-items-center mb-3",
         shiny::actionButton(
@@ -107,18 +109,20 @@ run_controller_ui <- function(id) {
         bslib::card_body(
           shiny::uiOutput(ns("stages_panel"))
         )
-      ),
-      bslib::card(
-        bslib::card_header("Live log (last 20 lines)"),
-        bslib::card_body(
-          shiny::verbatimTextOutput(ns("log_tail"), placeholder = TRUE)
-        )
-      ),
-      bslib::card(
-        bslib::card_header("Actions"),
-        bslib::card_body(
-          shiny::uiOutput(ns("post_run_actions"))
-        )
+      )
+    ),
+    # Live log — full-width card below the controls/settings row.
+    log = bslib::card(
+      bslib::card_header("Live log (last 20 lines)"),
+      bslib::card_body(
+        shiny::verbatimTextOutput(ns("log_tail"), placeholder = TRUE)
+      )
+    ),
+    # Post-run actions — full-width card below the log.
+    actions = bslib::card(
+      bslib::card_header("Actions"),
+      bslib::card_body(
+        shiny::uiOutput(ns("post_run_actions"))
       )
     ),
     # Compact header slot — state badge in the navbar.
