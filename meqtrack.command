@@ -16,6 +16,14 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "${SCRIPT_DIR}"
 
+# Silence renv's "project is out-of-sync" startup notice. setup.R installs
+# current package versions and re-snapshots, but renv can't fully pin the
+# GitHub (conumee2) / local-tarball (yamapData) packages, so it always flags
+# a residual lock-vs-library difference. It's cosmetic — every package the
+# app needs is installed — so we suppress the check in the launcher to avoid
+# alarming end users.
+export RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE
+
 echo "=============================================================="
 echo "  MeQTrack — launching..."
 echo "  Project: ${SCRIPT_DIR}"

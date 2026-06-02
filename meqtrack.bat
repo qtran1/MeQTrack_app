@@ -18,6 +18,13 @@ REM Resolve the script's own directory so the launcher works regardless
 REM of where the user placed MeQTrack_app.
 cd /d "%~dp0"
 
+REM Silence renv's "project is out-of-sync" startup notice. setup.R installs
+REM current package versions and re-snapshots, but renv can't fully pin the
+REM GitHub (conumee2) / local-tarball (yamapData) packages, so it always flags
+REM a residual lock-vs-library difference. It's cosmetic — every package the
+REM app needs is installed — so we suppress the check to avoid alarming users.
+set RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE
+
 echo ==============================================================
 echo   MeQTrack - launching...
 echo   Project: %CD%
