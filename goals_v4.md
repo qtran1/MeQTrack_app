@@ -40,23 +40,23 @@ also bundle other improvements.
 ## Assets in hand — validated 2026-05-20
 
 Two COMET reference cohorts were supplied. v2.0.0 ships the **1915-sample
-primary-diagnostic** set; the 4685-sample set is deferred to v2.1.
+primary-diagnostic** set. The 4685-sample set was **removed 2026-06-02**
+(decided not needed — never registered, never selectable); its files are
+gone from the repo and local disk.
 
 | Asset | File (in `reference/`) | Status |
 |---|---|---|
 | 1915 embedding | `tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData` | committed (2 MB) |
 | 1915 β-matrix | `beta_top10K_COMET_…1915samples2.csv` (345 MB) | gitignored — too large |
-| 4685 embedding | `tSNE_embedding_4685samples_top10K_overlapProbes.RData` | committed (4.6 MB) |
-| 4685 β-matrix | `beta_4685samples_top10K_overlapingProbes.csv` (845 MB) | gitignored — too large |
 | metadata | `COMET_Labkey_August_12_2025.csv` (2.6 MB) | committed |
 
 - **1915 set = COMET primary patient tumours only.** Embedding ↔
   β-matrix ↔ metadata all align (verified). The cleaner diagnostic
   reference — v2.0.0 scope.
 - **4685 set = the entire COMET cohort** (adds xenografts, cell lines,
-  normals, recurrences). Its embedding has **no rownames**; the user
-  confirmed its row order matches the β-matrix column order, so it is
-  recoverable — deferred to v2.1.
+  normals, recurrences). Its embedding had **no rownames**, so it was
+  never registered or selectable. **Removed 2026-06-02** — decided not
+  needed.
 - Each embedding `.RData` holds one `snifter` object: 2-D coords + the
   trained openTSNE model (affinities, perplexity 30, hyperparameters).
 - Metadata columns: Sentrix ID = `X850k Tumor File Name`, class label =
@@ -273,10 +273,10 @@ samples). Each was registered in the `.REFERENCE_DATASETS` table in
 2. the training β-matrix it was built on (the `old` data for projection);
 3. a `Sentrix_ID → tumour-class` metadata table.
 
-Still deferred beyond v2.1.0: the 4685-sample full-COMET set (its
-embedding's rownames must first be restored from the β-matrix column
-order). Also deferred: UMAP reference projection, alternate projection
-methods, batch correction.
+The 4685-sample full-COMET set was **removed 2026-06-02** (decided not
+needed — its embedding lacked rownames and was never registered). Still
+deferred: UMAP reference projection, alternate projection methods, batch
+correction.
 
 ## Open questions still to resolve
 
@@ -285,10 +285,6 @@ methods, batch correction.
   match; should a very low match instead hard-refuse the projection?
 - Confidence visualization in the UI beyond the hint table (e.g.
   shading projected points by k-NN distance).
-- Whether the 4685-sample COMET set is still worth adding as a
-  selectable reference (its embedding's rownames must first be restored
-  from the β-matrix column order) — v2.1.0 added Capper and sarcoma but
-  not this one.
 - `snifter` pulls in a `basilisk`-managed Python env (openTSNE) that
   provisions on first use — needs network and several minutes. Resolved
   for v2.0.0: the env provisions on first run and the Help tab warns the
