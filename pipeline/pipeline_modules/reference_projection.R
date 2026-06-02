@@ -45,7 +45,7 @@
   COMET_1915 = list(
     label       = "COMET primary-diagnostic (1915 patient tumours)",
     embedding   = "tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData",
-    beta_rds    = "beta_1915_COMET.rds",
+    beta_rds    = "beta_COMET_1915samples_top10K.rds",
     beta_csv    = NA_character_,
     metadata    = "COMET_Labkey_August_12_2025.csv",
     sentrix_col = "X850k Tumor File Name",

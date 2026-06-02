@@ -61,7 +61,7 @@ fi
 # Each is the compact .rds that reference_projection.R::load_reference()
 # reads. Add a line here when a new dataset joins .REFERENCE_DATASETS.
 ref_betas=(
-  "reference/beta_1915_COMET.rds"
+  "reference/beta_COMET_1915samples_top10K.rds"
   "reference/beta_GSE90496_top10K.rds"
   "reference/beta_GSE140686_1077Sarcoma_top10K.rds"
 )
@@ -163,7 +163,7 @@ required=(
   "pipeline/methylation_pipeline.R"
   "pipeline/data/yamapData_0.0.3.tar.gz"
   "pipeline/data/keep.probes.EPIC.txt"
-  "reference/beta_1915_COMET.rds"
+  "reference/beta_COMET_1915samples_top10K.rds"
   "reference/tSNE_embedding_1915sample_overlap_probesEPICv1andv2.RData"
   "reference/COMET_Labkey_August_12_2025.csv"
   "reference/beta_GSE90496_top10K.rds"
