@@ -25,6 +25,20 @@ generate_report <- function(qc_results = NULL,
   # Check prerequisites for HTML rendering
   # ------------------------------------------------------------------
   has_rmarkdown <- requireNamespace("rmarkdown", quietly = TRUE)
+
+  # R from CRAN ships no pandoc (only RStudio bundles one), so a plain
+  # double-click install has none on PATH. setup.R provisions a managed copy
+  # via the `pandoc` package in that case; wire it in here. find_pandoc()
+  # checks RSTUDIO_PANDOC first, so point it at the managed binary's dir and
+  # clear the cache so the new location takes effect.
+  if (has_rmarkdown && nchar(rmarkdown::find_pandoc()$dir) == 0 &&
+      requireNamespace("pandoc", quietly = TRUE) &&
+      isTRUE(tryCatch(pandoc::pandoc_available(), error = function(e) FALSE))) {
+    Sys.setenv(RSTUDIO_PANDOC = dirname(pandoc::pandoc_bin()))
+    rmarkdown::find_pandoc(cache = FALSE)
+    message("Using managed pandoc: ", Sys.getenv("RSTUDIO_PANDOC"))
+  }
+
   has_pandoc    <- has_rmarkdown && nchar(rmarkdown::find_pandoc()$dir) > 0
   has_DT        <- requireNamespace("DT", quietly = TRUE)
   has_knitr     <- requireNamespace("knitr", quietly = TRUE)

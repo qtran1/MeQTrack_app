@@ -118,6 +118,10 @@ cran_packages <- c(
   "optparse", "data.table", "ggplot2", "plotly", "Rtsne", "umap",
   "dendextend", "circlize", "htmlwidgets", "rmarkdown", "knitr",
   "DT", "yaml", "ggrepel", "RColorBrewer",
+  # Manages a pandoc binary for the HTML report on hosts without a system
+  # pandoc (CRAN R ships none). Tiny package; the binary is fetched in
+  # section 6b only when needed. See visualization.R for the render-time wiring.
+  "pandoc",
   # App runtime
   "shiny", "bslib", "shinyFiles", "shinycssloaders",
   "promises", "future", "callr",
@@ -332,6 +336,39 @@ if (length(missing_pkgs) > 0) {
     "Re-run setup.R after fixing the underlying issue; the messages above ",
     "should point at the failing package."
   )
+}
+
+# ---------------------------------------------------------------------------
+# 6b. Pandoc for the HTML report
+# ---------------------------------------------------------------------------
+# rmarkdown::render() (the report step) needs a pandoc binary. R installed
+# from CRAN does not ship one — only RStudio bundles pandoc — so on a plain
+# double-click install pandoc is absent and the report silently falls back
+# to plain text. If no system pandoc is found, provision a managed copy via
+# the `pandoc` package; visualization.R points RSTUDIO_PANDOC at it at render
+# time. Non-fatal: the report degrades gracefully, so a failed pandoc
+# download must not abort the whole setup.
+if (!nzchar(rmarkdown::find_pandoc()$dir)) {
+  message("No system pandoc found; provisioning a managed copy for the HTML report...")
+  if (!requireNamespace("pandoc", quietly = TRUE)) {
+    install.packages("pandoc", type = "binary", repos = .cran_repos)
+  }
+  pandoc_ok <- tryCatch({
+    if (!pandoc::pandoc_available()) pandoc::pandoc_install()
+    isTRUE(pandoc::pandoc_available())
+  }, error = function(e) {
+    message("  pandoc provisioning failed: ", conditionMessage(e))
+    FALSE
+  })
+  if (isTRUE(pandoc_ok)) {
+    message("  Managed pandoc ready: ", pandoc::pandoc_bin())
+  } else {
+    message("  Could not provision pandoc. The HTML report will fall back to ",
+            "plain text; install pandoc manually (https://pandoc.org/installing.html) ",
+            "to enable it.")
+  }
+} else {
+  message("Using system pandoc: ", rmarkdown::find_pandoc()$dir)
 }
 
 # ---------------------------------------------------------------------------
