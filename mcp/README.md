@@ -81,6 +81,36 @@ claude mcp add meqtrack /ABSOLUTE/PATH/TO/MeQTrack_app/mcp/.venv/bin/meqtrack-mc
 
 (Windows: point `command` at `mcp\.venv\Scripts\meqtrack-mcp.exe`.)
 
+### Connect from Cursor
+
+This repo ships a project-level config at `.cursor/mcp.json`. One-time setup:
+
+```bash
+# From the repo root — provisions mcp/.venv and the meqtrack-mcp command
+bash mcp/setup.sh
+```
+
+Then **restart Cursor** (MCP servers load at startup). In **Settings → Tools & MCP**
+you should see **meqtrack** with tools like `validate_samplesheet`, `run_pipeline`,
+and `get_qc_summary`.
+
+If the server shows disconnected:
+
+1. Confirm MeQTrack setup has run at least once (`./meqtrack.command` or `Rscript setup.R`)
+   so `Rscript` and the renv library work.
+2. Run `mcp/.venv/bin/meqtrack-mcp` in a terminal — it should start and wait (no error).
+3. On Windows, edit `.cursor/mcp.json` and point `command` at
+   `${workspaceFolder}${/}mcp${/}.venv${/}Scripts${/}meqtrack-mcp.exe`.
+
+Optional overrides go in the `env` block of `.cursor/mcp.json`:
+
+```json
+"env": {
+  "MEQTRACK_WORKSPACE": "${userHome}/MeQTrack",
+  "MEQTRACK_RSCRIPT": "/usr/local/bin/Rscript"
+}
+```
+
 ### Connect from ChatGPT desktop (HTTP connector)
 
 Unlike Claude Desktop/Code, **ChatGPT does not launch a local command** — it
