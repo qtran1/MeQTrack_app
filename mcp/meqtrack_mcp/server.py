@@ -1,19 +1,29 @@
 """FastMCP server exposing MeQTrack pipeline tools to an MCP client.
 
-Run with:  meqtrack-mcp        (console script)
+Run with:  meqtrack-mcp              (stdio — Claude Desktop/Code)
+       or:  meqtrack-mcp --http      (streamable HTTP — ChatGPT desktop connector)
        or:  python -m meqtrack_mcp.server
-Transport: stdio (the default an MCP client like Claude Desktop/Code expects).
+
+Transport defaults to stdio. HTTP mode is selected with `--http`/`--sse` or
+the MEQTRACK_MCP_TRANSPORT env var; host/port come from MEQTRACK_MCP_HOST /
+MEQTRACK_MCP_PORT (default 127.0.0.1:8000, path /mcp).
 """
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from . import config, pipeline, results
 
-mcp = FastMCP("meqtrack")
+mcp = FastMCP(
+    "meqtrack",
+    host=os.environ.get("MEQTRACK_MCP_HOST", "127.0.0.1"),
+    port=int(os.environ.get("MEQTRACK_MCP_PORT", "8000")),
+)
 
 
 @mcp.tool()
@@ -100,7 +110,25 @@ def get_report(run_id: str) -> dict:
 
 
 def main() -> None:
-    mcp.run()
+    transport = os.environ.get("MEQTRACK_MCP_TRANSPORT", "stdio").lower()
+    if "--http" in sys.argv:
+        transport = "streamable-http"
+    elif "--sse" in sys.argv:
+        transport = "sse"
+    if transport in ("http", "streamable-http"):
+        # Remote transport — e.g. behind a tunnel for a ChatGPT connector.
+        # NOTE: this exposes a server that runs the local pipeline; put it
+        # behind auth and do NOT expose it to untrusted networks.
+        print(
+            f"meqtrack-mcp: streamable-http on "
+            f"http://{mcp.settings.host}:{mcp.settings.port}{mcp.settings.streamable_http_path}",
+            file=sys.stderr,
+        )
+        mcp.run(transport="streamable-http")
+    elif transport == "sse":
+        mcp.run(transport="sse")
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":
