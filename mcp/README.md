@@ -89,23 +89,27 @@ through OpenAI's cloud. So a `localhost` URL is **not reachable**; the server
 must run over HTTP and be exposed publicly behind auth.
 
 > ⚠️ **Security:** this server runs the local pipeline (reads IDATs, spawns
-> processes) and has **no built-in auth**. Exposing it to the internet is a real
-> risk — do **not** point a public tunnel at a clinical/PHI workstation. Treat
-> the steps below as a *local experiment with non-sensitive example data*, and
-> put a reverse proxy with a token/OAuth in front before any real use. For
-> day-to-day local use, prefer Claude Desktop/Code (stdio) above.
+> processes). HTTP mode has a **built-in bearer-token gate** and refuses to
+> start without a token, but a token is not a substitute for caution: still
+> **don't point a public tunnel at a clinical/PHI workstation**, keep the tunnel
+> private, and prefer Claude Desktop/Code (stdio) for day-to-day local use.
 
-1. **Run in HTTP mode:**
+1. **Run in HTTP mode with a token** (required — the server won't start in HTTP
+   mode without `MEQTRACK_MCP_TOKEN`):
    ```bash
-   .venv/bin/meqtrack-mcp --http      # serves http://127.0.0.1:8000/mcp
+   export MEQTRACK_MCP_TOKEN="$(openssl rand -hex 24)"   # your shared secret
+   echo "$MEQTRACK_MCP_TOKEN"                             # note it for step 3
+   .venv/bin/meqtrack-mcp --http                          # http://127.0.0.1:8000/mcp
    ```
-   (Override with `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT`.)
+   Clients must send `Authorization: Bearer <token>`; anything else gets `401`.
+   (Override host/port with `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT`. For a
+   purely localhost test with no auth, set `MEQTRACK_MCP_ALLOW_NO_AUTH=1`.)
 2. **Expose it** with a tunnel so ChatGPT's cloud can reach it, e.g.
    `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000` →
-   gives a public `https://…` URL. Add auth in front of it.
+   gives a public `https://…` URL (keep it private).
 3. **Add the connector** in the ChatGPT desktop app: Settings → Connectors
    (developer/advanced mode) → add a custom MCP connector pointing at
-   `https://…/mcp`.
+   `https://…/mcp`, with the auth header `Authorization: Bearer <token>`.
 4. The exact menu, plan requirements, and supported tool shapes change often —
    check OpenAI's current connector/MCP docs.
 
@@ -119,6 +123,8 @@ must run over HTTP and be exposed publicly behind auth.
 | `MEQTRACK_RSCRIPT` | first `Rscript` on PATH | R interpreter to use. |
 | `MEQTRACK_MCP_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` \| `sse` (or pass `--http`). |
 | `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT` | `127.0.0.1` / `8000` | Bind address for HTTP mode. |
+| `MEQTRACK_MCP_TOKEN` | _(unset)_ | Bearer token required in HTTP mode; clients send `Authorization: Bearer <token>`. |
+| `MEQTRACK_MCP_ALLOW_NO_AUTH` | _(unset)_ | Set `1` to allow HTTP mode without a token (localhost-only testing). |
 
 Set these in the client's server config `env` block if you need to override them.
 

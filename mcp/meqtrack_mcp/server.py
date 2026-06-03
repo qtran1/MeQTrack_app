@@ -11,6 +11,7 @@ MEQTRACK_MCP_PORT (default 127.0.0.1:8000, path /mcp).
 
 from __future__ import annotations
 
+import hmac
 import os
 import sys
 from typing import Optional
@@ -109,6 +110,73 @@ def get_report(run_id: str) -> dict:
     return results.get_report(run_id)
 
 
+class _BearerAuthASGI:
+    """Pure-ASGI bearer-token gate in front of the MCP HTTP app.
+
+    Pure ASGI (not Starlette BaseHTTPMiddleware) so it does not buffer the
+    transport's streaming responses. Only HTTP scopes are checked; lifespan
+    events pass straight through.
+    """
+
+    def __init__(self, app, token: str):
+        self.app = app
+        self._expected = f"Bearer {token}".encode()
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            headers = dict(scope.get("headers") or [])
+            provided = headers.get(b"authorization", b"")
+            if not hmac.compare_digest(provided, self._expected):
+                await send({
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"www-authenticate", b"Bearer"),
+                    ],
+                })
+                await send({"type": "http.response.body", "body": b'{"error":"unauthorized"}'})
+                return
+        await self.app(scope, receive, send)
+
+
+def _serve_http() -> None:
+    """Serve the streamable-HTTP transport behind a bearer-token gate.
+
+    Refuses to start without a token unless MEQTRACK_MCP_ALLOW_NO_AUTH=1, so a
+    server can't be tunnelled to the internet wide open by accident.
+    """
+    import uvicorn
+
+    host, port = mcp.settings.host, mcp.settings.port
+    path = mcp.settings.streamable_http_path
+    token = os.environ.get("MEQTRACK_MCP_TOKEN")
+    allow_no_auth = os.environ.get("MEQTRACK_MCP_ALLOW_NO_AUTH") == "1"
+
+    if not token and not allow_no_auth:
+        print(
+            "meqtrack-mcp: refusing to start HTTP mode without auth.\n"
+            "  Set MEQTRACK_MCP_TOKEN=<secret> — clients must then send\n"
+            "  'Authorization: Bearer <secret>'.\n"
+            "  Or set MEQTRACK_MCP_ALLOW_NO_AUTH=1 for a trusted localhost-only test.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    app = mcp.streamable_http_app()
+    if token:
+        app = _BearerAuthASGI(app, token)
+        auth_note = "bearer token required"
+    else:
+        auth_note = "NO AUTH — localhost test only"
+
+    print(
+        f"meqtrack-mcp: streamable-http on http://{host}:{port}{path}  [{auth_note}]",
+        file=sys.stderr,
+    )
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
 def main() -> None:
     transport = os.environ.get("MEQTRACK_MCP_TRANSPORT", "stdio").lower()
     if "--http" in sys.argv:
@@ -116,15 +184,7 @@ def main() -> None:
     elif "--sse" in sys.argv:
         transport = "sse"
     if transport in ("http", "streamable-http"):
-        # Remote transport — e.g. behind a tunnel for a ChatGPT connector.
-        # NOTE: this exposes a server that runs the local pipeline; put it
-        # behind auth and do NOT expose it to untrusted networks.
-        print(
-            f"meqtrack-mcp: streamable-http on "
-            f"http://{mcp.settings.host}:{mcp.settings.port}{mcp.settings.streamable_http_path}",
-            file=sys.stderr,
-        )
-        mcp.run(transport="streamable-http")
+        _serve_http()
     elif transport == "sse":
         mcp.run(transport="sse")
     else:
