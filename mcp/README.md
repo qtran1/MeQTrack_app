@@ -81,6 +81,34 @@ claude mcp add meqtrack /ABSOLUTE/PATH/TO/MeQTrack_app/mcp/.venv/bin/meqtrack-mc
 
 (Windows: point `command` at `mcp\.venv\Scripts\meqtrack-mcp.exe`.)
 
+### Connect from ChatGPT desktop (HTTP connector)
+
+Unlike Claude Desktop/Code, **ChatGPT does not launch a local command** — it
+adds MCP servers as *connectors that point to a URL*, and the calls are brokered
+through OpenAI's cloud. So a `localhost` URL is **not reachable**; the server
+must run over HTTP and be exposed publicly behind auth.
+
+> ⚠️ **Security:** this server runs the local pipeline (reads IDATs, spawns
+> processes) and has **no built-in auth**. Exposing it to the internet is a real
+> risk — do **not** point a public tunnel at a clinical/PHI workstation. Treat
+> the steps below as a *local experiment with non-sensitive example data*, and
+> put a reverse proxy with a token/OAuth in front before any real use. For
+> day-to-day local use, prefer Claude Desktop/Code (stdio) above.
+
+1. **Run in HTTP mode:**
+   ```bash
+   .venv/bin/meqtrack-mcp --http      # serves http://127.0.0.1:8000/mcp
+   ```
+   (Override with `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT`.)
+2. **Expose it** with a tunnel so ChatGPT's cloud can reach it, e.g.
+   `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000` →
+   gives a public `https://…` URL. Add auth in front of it.
+3. **Add the connector** in the ChatGPT desktop app: Settings → Connectors
+   (developer/advanced mode) → add a custom MCP connector pointing at
+   `https://…/mcp`.
+4. The exact menu, plan requirements, and supported tool shapes change often —
+   check OpenAI's current connector/MCP docs.
+
 ---
 
 ## Configuration (env vars)
@@ -89,6 +117,8 @@ claude mcp add meqtrack /ABSOLUTE/PATH/TO/MeQTrack_app/mcp/.venv/bin/meqtrack-mc
 |-----|---------|---------|
 | `MEQTRACK_WORKSPACE` | `~/MeQTrack` | Where runs are written (shared with the app). |
 | `MEQTRACK_RSCRIPT` | first `Rscript` on PATH | R interpreter to use. |
+| `MEQTRACK_MCP_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` \| `sse` (or pass `--http`). |
+| `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT` | `127.0.0.1` / `8000` | Bind address for HTTP mode. |
 
 Set these in the client's server config `env` block if you need to override them.
 
