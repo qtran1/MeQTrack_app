@@ -110,33 +110,49 @@ def get_report(run_id: str) -> dict:
     return results.get_report(run_id)
 
 
-class _BearerAuthASGI:
-    """Pure-ASGI bearer-token gate in front of the MCP HTTP app.
+_HEALTH_BODY = b'{"status":"ok","service":"meqtrack-mcp"}'
+
+
+async def _send_json(send, status: int, body: bytes, extra_headers=()) -> None:
+    await send({
+        "type": "http.response.start",
+        "status": status,
+        "headers": [(b"content-type", b"application/json"), *extra_headers],
+    })
+    await send({"type": "http.response.body", "body": body})
+
+
+class _HttpGate:
+    """Pure-ASGI gate in front of the MCP HTTP app.
+
+    - ``GET /healthz`` is always unauthenticated and returns 200 (handy for
+      tunnel/load-balancer health checks).
+    - Every other HTTP request requires ``Authorization: Bearer <token>`` when a
+      token is configured; missing/wrong -> 401.
 
     Pure ASGI (not Starlette BaseHTTPMiddleware) so it does not buffer the
-    transport's streaming responses. Only HTTP scopes are checked; lifespan
+    transport's streaming responses; only HTTP scopes are gated, lifespan
     events pass straight through.
     """
 
-    def __init__(self, app, token: str):
+    def __init__(self, app, token: Optional[str]):
         self.app = app
-        self._expected = f"Bearer {token}".encode()
+        self._expected = f"Bearer {token}".encode() if token else None
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            headers = dict(scope.get("headers") or [])
-            provided = headers.get(b"authorization", b"")
-            if not hmac.compare_digest(provided, self._expected):
-                await send({
-                    "type": "http.response.start",
-                    "status": 401,
-                    "headers": [
-                        (b"content-type", b"application/json"),
-                        (b"www-authenticate", b"Bearer"),
-                    ],
-                })
-                await send({"type": "http.response.body", "body": b'{"error":"unauthorized"}'})
+            if scope.get("path", "") == "/healthz":
+                await _send_json(send, 200, _HEALTH_BODY)
                 return
+            if self._expected is not None:
+                headers = dict(scope.get("headers") or [])
+                provided = headers.get(b"authorization", b"")
+                if not hmac.compare_digest(provided, self._expected):
+                    await _send_json(
+                        send, 401, b'{"error":"unauthorized"}',
+                        [(b"www-authenticate", b"Bearer")],
+                    )
+                    return
         await self.app(scope, receive, send)
 
 
@@ -163,15 +179,12 @@ def _serve_http() -> None:
         )
         sys.exit(2)
 
-    app = mcp.streamable_http_app()
-    if token:
-        app = _BearerAuthASGI(app, token)
-        auth_note = "bearer token required"
-    else:
-        auth_note = "NO AUTH — localhost test only"
+    app = _HttpGate(mcp.streamable_http_app(), token)
+    auth_note = "bearer token required" if token else "NO AUTH — localhost test only"
 
     print(
-        f"meqtrack-mcp: streamable-http on http://{host}:{port}{path}  [{auth_note}]",
+        f"meqtrack-mcp: streamable-http on http://{host}:{port}{path}  [{auth_note}]; "
+        f"health: http://{host}:{port}/healthz",
         file=sys.stderr,
     )
     uvicorn.run(app, host=host, port=port, log_level="info")

@@ -102,8 +102,10 @@ must run over HTTP and be exposed publicly behind auth.
    .venv/bin/meqtrack-mcp --http                          # http://127.0.0.1:8000/mcp
    ```
    Clients must send `Authorization: Bearer <token>`; anything else gets `401`.
-   (Override host/port with `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT`. For a
-   purely localhost test with no auth, set `MEQTRACK_MCP_ALLOW_NO_AUTH=1`.)
+   An unauthenticated `GET /healthz` returns `200 {"status":"ok"}` for
+   tunnel/load-balancer health checks. (Override host/port with
+   `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT`. For a purely localhost test with
+   no auth, set `MEQTRACK_MCP_ALLOW_NO_AUTH=1`.)
 2. **Expose it** with a tunnel so ChatGPT's cloud can reach it, e.g.
    `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000` →
    gives a public `https://…` URL (keep it private).
