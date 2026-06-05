@@ -10,9 +10,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+openai = ["openai-agents>=0.1"]
 
 [project.scripts]
 meqtrack-mcp = "meqtrack_mcp.server:main"
+meqtrack-chat = "meqtrack_mcp.openai_agent:main"
 
 [build-system]
 requires = ["hatchling"]

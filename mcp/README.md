@@ -115,6 +115,28 @@ must run over HTTP and be exposed publicly behind auth.
 4. The exact menu, plan requirements, and supported tool shapes change often —
    check OpenAI's current connector/MCP docs.
 
+### Use a GPT model locally (OpenAI Agents SDK) — no connector needed
+
+If ChatGPT's custom connectors aren't available on your account (they're gated to
+certain plans / a "developer mode" toggle), you can still chat-drive MeQTrack with
+a GPT model — **locally, over stdio, no tunnel**. This is the GPT equivalent of
+using Claude Code.
+
+```bash
+.venv/bin/pip install -e ".[openai]"        # installs openai-agents
+export OPENAI_API_KEY=sk-...                 # see note below
+.venv/bin/meqtrack-chat                       # terminal chat; 'exit' to quit
+```
+
+> ⚠️ `OPENAI_API_KEY` is an OpenAI **API** key (platform.openai.com) and is billed
+> through the API — **separate from a ChatGPT Plus/Pro subscription**, which does
+> not include API usage.
+
+The agent launches the MCP server itself (stdio), discovers the tools, and runs
+everything on your machine. Pick the model with `MEQTRACK_OPENAI_MODEL` (default
+`gpt-4.1`). Example: *"Validate `pipeline/data/example/samplesheet_epic.csv`,
+then run preprocess and tell me the QC summary."*
+
 ---
 
 ## Configuration (env vars)
@@ -127,6 +149,8 @@ must run over HTTP and be exposed publicly behind auth.
 | `MEQTRACK_MCP_HOST` / `MEQTRACK_MCP_PORT` | `127.0.0.1` / `8000` | Bind address for HTTP mode. |
 | `MEQTRACK_MCP_TOKEN` | _(unset)_ | Bearer token required in HTTP mode; clients send `Authorization: Bearer <token>`. |
 | `MEQTRACK_MCP_ALLOW_NO_AUTH` | _(unset)_ | Set `1` to allow HTTP mode without a token (localhost-only testing). |
+| `OPENAI_API_KEY` | _(unset)_ | Required by `meqtrack-chat` (the local GPT client). API-billed, not the ChatGPT subscription. |
+| `MEQTRACK_OPENAI_MODEL` | `gpt-4.1` | Model used by `meqtrack-chat`. |
 
 Set these in the client's server config `env` block if you need to override them.
 
