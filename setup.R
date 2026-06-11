@@ -118,6 +118,10 @@ cran_packages <- c(
   "optparse", "data.table", "ggplot2", "plotly", "Rtsne", "umap",
   "dendextend", "circlize", "htmlwidgets", "rmarkdown", "knitr",
   "DT", "yaml", "ggrepel", "RColorBrewer",
+  # CNV heatmap visualization (pipeline/cnv_heatmap.R): ggnewscale provides
+  # the second fill scale for chromosome bands, patchwork composes the group
+  # sidebars with the heatmap. Without these the CNV visualization step fails.
+  "ggnewscale", "patchwork",
   # Manages a pandoc binary for the HTML report on hosts without a system
   # pandoc (CRAN R ships none). Tiny package; the binary is fetched in
   # section 6b only when needed. See visualization.R for the render-time wiring.
@@ -162,6 +166,10 @@ install.packages(cran_packages, type = "binary", repos = .cran_repos)
 bioc_packages <- c(
   # core analysis
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
+  # GO.db is a dependency of missMethyl (gene-set / GO enrichment) that
+  # BiocManager has been observed to skip on a fresh macOS install, leaving
+  # missMethyl unable to load. List it explicitly so it's always present.
+  "GO.db",
   "DMRcate", "GenomicRanges", "sesame", "Gviz",
   # conumee2 transitive deps. conumee2 is installed from GitHub below
   # and its source build needs methylumi to load (methylumi in turn
