@@ -116,8 +116,8 @@ BiocManager::install(update = FALSE, ask = FALSE)
 cran_packages <- c(
   # Pipeline runtime
   "optparse", "data.table", "ggplot2", "plotly", "Rtsne", "umap",
-  "dendextend", "circlize", "htmlwidgets", "rmarkdown", "knitr",
-  "DT", "yaml", "ggrepel", "RColorBrewer",
+  "dendextend", "htmlwidgets", "rmarkdown", "knitr",
+  "DT", "yaml", "RColorBrewer",
   # CNV heatmap visualization (pipeline/cnv_heatmap.R): ggnewscale provides
   # the second fill scale for chromosome bands, patchwork composes the group
   # sidebars with the heatmap. Without these the CNV visualization step fails.
@@ -126,9 +126,10 @@ cran_packages <- c(
   # pandoc (CRAN R ships none). Tiny package; the binary is fetched in
   # section 6b only when needed. See visualization.R for the render-time wiring.
   "pandoc",
-  # App runtime
+  # App runtime. Async work uses callr::r_bg (see app/R/run_controller.R),
+  # not future — so future is intentionally not a dependency.
   "shiny", "bslib", "shinyFiles", "shinycssloaders",
-  "promises", "future", "callr",
+  "promises", "callr",
   "ggdendro", "jsonlite",
   # Needed for the conumee2 GitHub install (supports `subdir = ...`):
   #   remotes::install_github("hovestadtlab/conumee2", subdir = "conumee2")
@@ -311,8 +312,8 @@ required_pkgs <- c(
   # CRAN
   "data.table", "ggplot2", "plotly", "Rtsne", "umap", "dendextend",
   "stringr", "shiny", "bslib", "shinyFiles", "shinycssloaders",
-  "promises", "future", "callr", "ggdendro", "jsonlite", "yaml",
-  "DT", "ggrepel", "RColorBrewer", "rmarkdown", "knitr",
+  "promises", "callr", "ggdendro", "jsonlite", "yaml",
+  "DT", "RColorBrewer", "rmarkdown", "knitr",
   # Bioc core
   "minfi", "limma", "missMethyl", "matrixStats", "snifter",
   "DMRcate", "GenomicRanges", "sesame", "sesameData", "Gviz",
