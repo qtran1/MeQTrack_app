@@ -183,8 +183,8 @@ install_dependencies <- function(quiet = FALSE) {
   # CRAN packages
   cran_packages <- c(
     "optparse", "data.table", "ggplot2", "plotly", "Rtsne", "umap",
-    "dendextend", "circlize", "htmlwidgets", "rmarkdown", "knitr",
-    "DT", "parallel", "yaml", "ggrepel"
+    "dendextend", "htmlwidgets", "rmarkdown", "knitr",
+    "DT", "parallel", "yaml"
   )
   
   # Bioconductor packages.
