@@ -145,12 +145,11 @@ cp meqtrack.bat       "${stage_dir}/meqtrack.bat"
 # End-user documentation:
 #   README.md                       — orientation: what MeQTrack is + workflow
 #   QUICKSTART.md                   — install + run instructions
-#   meqtrack-mvp-requirements.md    — per-feature reference (F-1..F-12)
-# Internal docs (goals*.md, mvp-plan.md, docs/decisions/) stay out of
-# the release — they're developer notes, not user-facing.
+# Internal docs (goals*.md, mvp-plan.md, the MVP requirements/feature
+# reference, docs/decisions/) stay out of the release — they're developer
+# notes, not user-facing — and live in the private MeQTrack_planning repo.
 cp README.md                       "${stage_dir}/README.md"
 cp QUICKSTART.md                   "${stage_dir}/QUICKSTART.md"
-cp meqtrack-mvp-requirements.md    "${stage_dir}/meqtrack-mvp-requirements.md"
 
 # Make sure the macOS launcher is executable inside the zip.
 chmod +x "${stage_dir}/meqtrack.command"
@@ -180,7 +179,6 @@ required=(
   "meqtrack.bat"
   "README.md"
   "QUICKSTART.md"
-  "meqtrack-mvp-requirements.md"
 )
 missing=()
 for path in "${required[@]}"; do
