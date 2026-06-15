@@ -4,7 +4,7 @@ A CLI-driven DNA methylation analysis pipeline for Illumina 450k, EPIC, and EPIC
 
 ## What it is
 
-`methylation_pipeline.R` is the single entry point — a CLI driver (`Rscript methylation_pipeline.R …`) that runs a six-step Illumina methylation array analysis end-to-end. It supports 450k, EPIC, and EPICv2 arrays, with `--array_type auto` inferring the platform from probe count. The six steps are `preprocess → qc → filtering → dim_reduction → cnv → visualization`, and the `--step` flag lets you run all of them or just one. Each module is a sourced R file in `pipeline_modules/`.
+`methylation_pipeline.R` is the single entry point — a CLI driver (`Rscript methylation_pipeline.R …`) that runs a seven-step Illumina methylation array analysis end-to-end. It supports 450k, EPIC, and EPICv2 arrays, with `--array_type auto` inferring the platform from probe count. The seven steps are `preprocess → qc → filtering → dim_reduction → reference_projection → cnv → visualization`, and the `--step` flag lets you run all of them or just one. Each module is a sourced R file in `pipeline_modules/`.
 
 A second, independent script, `cnv_heatmap.R`, is a standalone tool for producing a multi-sample CNV heatmap from an already-computed segmentation file — rows are samples, x-axis is genome coordinate, color is `seg.mean`, with optional metadata-driven side annotation bars. It's not called by the main pipeline; it's a downstream reporting utility.
 
@@ -33,6 +33,7 @@ pipeline/results_example/
 ├── processed_data/               beta_values.txt, preprocessed_data.RData, detection_p.txt, rgset.RData
 ├── qc/                           sample_qc_report.csv (8 rows), qc_results.RData
 ├── dimensionality_reduction/     tsne_results.RData, umap_results.RData, hclust_results.RData
+├── reference_projection/         projected coords CSV, class-hints CSV, projection PDF
 ├── cnv/                          cnv_results.RData, segments/{GSM3735546…}.seg
 ├── figures/                      per-module PDFs + interactive HTML widgets
 ├── reports/                      methylation_analysis_report.html
@@ -72,7 +73,7 @@ Rscript methylation_pipeline.R \
   --output     <results_dir> \
   --array_type {450K|EPIC|EPICv2|auto} \
   --threads    <N> \
-  --step       {all|preprocess|qc|filtering|dim_reduction|cnv|visualization} \
+  --step       {all|preprocess|qc|filtering|dim_reduction|reference_projection|cnv|visualization} \
   [--config    <config.R|config.yaml>] \
   [--data_dir  <dir-containing-keep.probes.*.txt>] \
   [--hpc]       # generate HPC submission scripts and exit
@@ -87,6 +88,7 @@ The driver reads the input samplesheet, deduplicates on `Basename`, then calls `
 ├── processed_data/               beta values, M values, rgset, sample_info, detection_p
 ├── qc/                           sample_qc_report.csv, qc_results.RData
 ├── dimensionality_reduction/     tsne_results.RData, umap_results.RData, hclust_results.RData
+├── reference_projection/         projected coords CSV, class-hints CSV, projection PDF
 ├── cnv/                          cnv_results.RData, segments/
 ├── figures/{qc,dim_reduction,cnv}  PDFs and interactive HTML widgets
 ├── reports/                      methylation_analysis_report.html (or .txt fallback)
@@ -104,6 +106,8 @@ Each step persists its outputs as `.RData` so later steps can be re-run independ
 **Filtering (`pipeline_modules/filtering.R`).** Takes the beta matrix and applies two reduction steps. First, a detection-p filter: probes with detection p > 0.05 in more than `min_sample_success_rate` of samples are dropped. Second, an array-specific curated keep-list — this is what the `data/keep.probes.{450K,EPIC,EPICv2}.txt` files are for. For EPICv2 the match is done on the probe-name prefix (strips the `_*` suffix) because EPICv2 names carry a replicate suffix that the keep list doesn't. The CLI flags `remove_sex_chromosomes`, `remove_snps`, `remove_cross_reactive` are wired through the function signature, but the body here mostly defers cross-reactive/SNP removal to the curated keep list rather than calling `DMRcate::rmSNPandCH` live (the `rmSNPandCH` call is present but commented out). Output: `filtered_beta_values.txt` plus a `filtered_probes/filtering_summary.csv`.
 
 **Dimensionality reduction (`pipeline_modules/dim_reduction.R`).** Selects the top N most variable probes by SD/MAD (default 10,000), then runs three techniques on the samples: t-SNE via `Rtsne` (auto-caps perplexity at `(n_samples-1)/3`, drops duplicate samples and NA-containing probes), UMAP via the `umap` package, and hierarchical clustering with a Pearson or Spearman correlation distance (`1 - cor`) and configurable linkage (default `complete`). Each emits coordinates + an `.RData` object + a PDF. If a `Sample_Group` column is present in `sample_info`, points/leaves are colored by it.
+
+**Reference projection (`pipeline_modules/reference_projection.R`).** Self-contained — it reads IDATs and SWAN-normalizes the query itself (no preprocessing step required), so it also runs standalone via `--step reference_projection`. It projects each query sample onto a pre-built reference t-SNE embedding via `snifter::project()` (an R wrapper around `openTSNE`), harmonizing the query to the reference probe set on the query side only (EPICv2 probe-ID suffixes stripped, missing probes imputed with the reference per-probe mean). Three reference datasets ship in `reference/`: `COMET_1915` (default), `Capper_GSE90496` (CNS tumours), and `Sarcoma_GSE140686`; pick one with `config$reference_projection$dataset`. A k-NN vote in the embedding space (`config$reference_projection$knn_k`, default 25) assigns each sample a nearest reference tumour class with a confidence score and `ambiguous` / `distant_from_reference` flags. Outputs go to `reference_projection/`: projected coordinates CSV, class-hints CSV, and a plot PDF. Defaults: `enabled = TRUE`, `dataset = COMET_1915`, `perplexity = 5`, `knn_k = 25`.
 
 **CNV (`pipeline_modules/cnv_analysis.R`).** Dispatches on `method` — `conumee` (using `conumee2`) or `ChAMP`. The conumee path is the primary one: per sample, it builds a `CNV.data` object, normalizes against either user-supplied reference IDATs (via `config$reference_samples`) or internal controls shipped with yamapData, runs segmentation, and writes per-sample CNV plots + `.seg` tables into `cnv/segments/`. Across samples, `generate_cnv_frequency_plot()` produces a genome-wide gain/loss frequency plot at threshold 0.18.
 
@@ -132,6 +136,7 @@ pipeline/
 │   ├── qc.R                      perform_qc (detection p, intensity, SWAN recovery)
 │   ├── filtering.R               filter_probes, select_variable_probes, keep-list lookup
 │   ├── dim_reduction.R           run_tsne, run_umap, run_hierarchical_clustering
+│   ├── reference_projection.R    run_reference_projection (snifter/openTSNE projection + k-NN class hints)
 │   ├── cnv_analysis.R            run_cnv_analysis (conumee2 / ChAMP backends)
 │   ├── visualization.R           generate_report (rmarkdown HTML + text fallback)
 │   └── hpc.R                     generate_hpc_scripts (LSF / SLURM / PBS)

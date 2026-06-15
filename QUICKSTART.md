@@ -39,12 +39,13 @@ short version:
 1. **Samplesheet tab** — pick a CSV. Per-row validation runs
    immediately. The bundled example lives at
    `pipeline/data/example/samplesheet_epic.csv`.
-2. **Run tab** — optionally tweak the five parameters in the Settings
+2. **Run tab** — optionally tweak the parameters in the Settings
    card (defaults work for typical small cohorts), then click
    **Run analysis**. The Stages panel shows live per-step progress.
 3. **Result tabs** (QC / Dim. reduction / CNV / Report) populate as
    each pipeline stage finishes — you don't have to wait for the whole
-   pipeline to view QC.
+   pipeline to view QC. (Reference projection appears as a sub-tab under
+   Dim. reduction.)
 4. **Past runs tab** — every prior run is listed; click **Open** on
    any row to attach it. Result tabs render its artifacts and the
    per-step Run buttons start operating against that run.
