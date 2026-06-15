@@ -4,7 +4,7 @@ Status: Accepted (Wave 1, 2026-04-22)
 
 ## Context
 
-`mvp-plan.md` §3 Wave 1 asks for an explicit decision on how the app produces
+The Wave 1 plan asks for an explicit decision on how the app produces
 its HTML report for a run. There are two viable options:
 
 1. **Keep the existing `generate_report()` path** in
@@ -26,7 +26,7 @@ reporting logic.
 - `generate_report()` is already integrated with the pipeline's output layout
   and file-naming conventions. Rewriting it would duplicate logic with no user
   benefit at MVP.
-- `pandoc` is a documented host prerequisite (see `mvp-plan.md` §1.8 S-INST-3);
+- `pandoc` is a documented host prerequisite (requirement S-INST-3);
   the user installs it once. In exchange, the app avoids carrying its own
   HTML-generation stack.
 - The in-app views (t-SNE, UMAP, dendrogram, CNV) that Wave 4 adds are
@@ -36,7 +36,7 @@ reporting logic.
 - If the Rmd approach proves too rigid when the UI evolves, the escape hatch
   is to introduce a Shiny-rendered HTML as a **side output** in Wave 4 rather
   than trying to evolve `generate_report()`. This is called out as a watch
-  item in `mvp-plan.md` §3 "Cross-cutting risks".
+  item under the plan's "Cross-cutting risks".
 
 ## Consequences
 

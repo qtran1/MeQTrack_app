@@ -577,7 +577,7 @@ run_pipeline <- function(step) {
   
   if (step == "all" || step == "reference_projection") {
     # No "Step N:" prefix — the run_controller's stage-progress parser does
-    # not yet know about this stage (UI integration is goals_v4 Phase 3).
+    # not yet know about this stage (UI integration is a later roadmap item).
     # Until then it logs as a plain stage, like probe filtering.
     log_message("Reference projection", log_file)
 

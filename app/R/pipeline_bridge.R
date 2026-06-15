@@ -56,7 +56,7 @@ bridge_launch <- function(samplesheet,
 
   # Resolve the pipeline script relative to the current working directory
   # if not given. Callers (test_bridge.R, Shiny) are expected to cd into the
-  # project root, which matches the layout mvp-plan.md §2.4 documents.
+  # project root, which matches the documented project layout.
   if (is.null(pipeline_script)) {
     pipeline_script <- file.path(
       normalizePath(".", winslash = "/"),

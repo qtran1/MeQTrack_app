@@ -7,8 +7,8 @@
 # Wave 3 module. Consumes the samplesheet module's reactive state and talks
 # to the pipeline through pipeline_bridge.R (already written).
 #
-# Design note (deviation from mvp-plan §2.1):
-#   mvp-plan suggests ExtendedTask + promises + future. We use callr::r_bg
+# Design note (deviation from the original design spec):
+#   the spec suggested ExtendedTask + promises + future. We use callr::r_bg
 #   directly (a real OS subprocess) and poll its state via invalidateLater.
 #   ExtendedTask is designed to move a synchronous R computation to a future
 #   worker so it doesn't block the session; since callr::r_bg is already a
@@ -844,8 +844,8 @@ reveal_in_file_manager <- function(path) {
 }
 
 # Find the generated report HTML. The pipeline writes to <run_dir>/reports/
-# (plural) as methylation_analysis_report.html; the mvp-plan spec calls out
-# <run_dir>/report/meqtrack_*.html. Check both layouts so either works.
+# (plural) as methylation_analysis_report.html; the original design spec
+# called out <run_dir>/report/meqtrack_*.html. Check both layouts so either works.
 discover_report <- function(run_dir) {
   if (is.null(run_dir)) return(NULL)
   candidates <- c(

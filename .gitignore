@@ -29,7 +29,7 @@ pipeline/data/yamapData_*.tar.gz
 # canonical format: COMET ~137 MB, Capper ~211 MB). A CSV is only an
 # optional on-ramp (reference_projection.R parses + caches it as .rds) and
 # is larger still. All are distributed separately (Git LFS or
-# download-on-first-use) — see goals_v4.md Phase 0. The small embedding
+# download-on-first-use). The small embedding
 # .RData files and the metadata CSVs in reference/ ARE committed.
 reference/beta_*
 

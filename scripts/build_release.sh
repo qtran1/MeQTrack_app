@@ -145,9 +145,9 @@ cp meqtrack.bat       "${stage_dir}/meqtrack.bat"
 # End-user documentation:
 #   README.md                       — orientation: what MeQTrack is + workflow
 #   QUICKSTART.md                   — install + run instructions
-# Internal docs (goals*.md, mvp-plan.md, the MVP requirements/feature
-# reference, docs/decisions/) stay out of the release — they're developer
-# notes, not user-facing — and live in the private MeQTrack_planning repo.
+# Internal planning/requirements docs and docs/decisions/ stay out of the
+# release — they're developer notes, not user-facing. The planning docs
+# live in a separate private repo.
 cp README.md                       "${stage_dir}/README.md"
 cp QUICKSTART.md                   "${stage_dir}/QUICKSTART.md"
 
