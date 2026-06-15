@@ -62,7 +62,7 @@
   # to metadata rows) cannot consume it directly — and it need not, since
   # the per-sample `col` values already match that key exactly.
   Capper_GSE90496 = list(
-    label       = "Capper et al. CNS-tumour reference (2801 samples, GSE90496)",
+    label       = "Capper et al. CNS-tumor reference (2801 samples, GSE90496)",
     embedding   = "tSNE_embedding_GSE90496_top10K.RData",
     beta_rds    = "beta_GSE90496_top10K.rds",
     beta_csv    = NA_character_,
