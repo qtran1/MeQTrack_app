@@ -100,9 +100,6 @@ is reproducible and you keep your raw data alongside its outputs.
 
 - **CLI usage** of the underlying R pipeline (no UI required): see
   [`pipeline/README.md`](pipeline/README.md).
-- **Per-sample feature catalog** (what every metric / plot represents,
-  with feature IDs F-1 through F-12): see
-  [`meqtrack-mvp-requirements.md`](meqtrack-mvp-requirements.md).
 - **Working from a clone** (instead of the release zip): the
   "Developer setup" section of [QUICKSTART.md](QUICKSTART.md) walks
   through `Rscript setup.R` and the manual launch path.
