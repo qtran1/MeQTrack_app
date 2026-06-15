@@ -43,7 +43,7 @@
 # two never drift), and load_reference(dataset) resolves a key to its files.
 .REFERENCE_DATASETS <- list(
   COMET_1915 = list(
-    label       = "COMET primary-diagnostic (1915 patient tumours)",
+    label       = "Pour et al. COMET pediatric solid-tumor (1915 samples, GSE305405)",
     embedding   = "tSNE_embedding_GSE305405_top10K.RData",
     beta_rds    = "beta_GSE305405_1915samples_top10K.rds",
     beta_csv    = NA_character_,

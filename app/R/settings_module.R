@@ -309,7 +309,7 @@ character_or_default <- function(x, default) {
 # registry list and functions; library() calls live inside function bodies),
 # so sourcing it into a throwaway environment is cheap and safe.
 reference_dataset_choices <- function() {
-  fallback <- c("COMET primary-diagnostic (1915 patient tumours)" = "COMET_1915")
+  fallback <- c("Pour et al. COMET pediatric solid-tumor (1915 samples, GSE305405)" = "COMET_1915")
   reg_file <- tryCatch(
     file.path(pipeline_dir(), "pipeline_modules", "reference_projection.R"),
     error = function(e) NULL
