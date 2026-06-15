@@ -3,8 +3,9 @@
 **Me**thylation **Q**uality control and analysis **Track**ing — a
 single-user desktop app for Illumina methylation arrays (450K, EPIC,
 EPICv2). MeQTrack runs the analysis (QC, dimensionality reduction,
-copy-number variation, self-contained HTML report) **and tracks every
-run**: each invocation writes a timestamped folder with its samplesheet,
+reference projection, copy-number variation, self-contained HTML report)
+**and tracks every run**: each invocation writes a timestamped folder
+with its samplesheet,
 parameters, logs, and outputs, so any past run is reproducible and
 re-openable.
 
@@ -14,25 +15,28 @@ Your data never leaves your laptop.
 ## What it does
 
 Drop a CSV samplesheet pointing at your IDAT files into the app. One
-click runs a five-stage pipeline:
+click runs a six-stage pipeline:
 
 | Stage | What happens |
 |---|---|
 | **1. Preprocess** | Reads IDATs (auto-detects 450K / EPIC / EPICv2), applies SWAN normalization (or sesame's QCDB for EPICv2), produces β-values. |
 | **2. QC and probe filtering** | Per-sample detection-p, failed-probe %, intensity medians; flags samples outside thresholds. Then removes sex-chromosome probes, SNP-affected probes, cross-reactive probes, and applies array-specific keep-lists. |
 | **3. Dimensionality reduction** | t-SNE, UMAP, and hierarchical clustering on the most variable probes (default 10,000). |
-| **4. Copy-number variation** | Per-sample CNV via conumee2, genome-wide segment calls, frequency plot, and an in-app segment heatmap. |
-| **5. Report** | A self-contained HTML report you can open in any browser or share by email. |
+| **4. Reference projection** | Projects each sample onto a pre-built reference t-SNE embedding of thousands of labelled methylomes (COMET paediatric solid-tumour, Capper et al. CNS-tumour / GSE90496, or Koelsche et al. sarcoma / GSE140686), then assigns each sample a nearest reference tumour class by k-NN vote — a diagnostic hint with a confidence score and ambiguity / distant-from-reference flags. |
+| **5. Copy-number variation** | Per-sample CNV via conumee2, genome-wide segment calls, frequency plot, and an in-app segment heatmap. |
+| **6. Report** | A self-contained HTML report you can open in any browser or share by email. |
 
 The Shiny UI surfaces every stage interactively:
 
 - **Samplesheet tab** — pick a CSV, see per-row validation (missing
   IDATs, duplicate IDs, malformed rows) before running anything.
-- **Run tab** — a Settings card with five tunable parameters
-  (detection-p threshold, failed-probe % per sample, # variable probes,
-  t-SNE perplexity, UMAP neighbors), Run / Cancel controls, the Stages
-  panel with per-stage **▶ Run** buttons for re-running an individual
-  stage, live log tail, and post-run actions.
+- **Run tab** — a Settings card with tunable parameters across QC,
+  dim. reduction, reference projection, and CNV (detection-p threshold,
+  failed-probe % per sample, # variable probes, t-SNE perplexity, UMAP
+  neighbors, the reference-dataset picker, projection perplexity, and
+  the k-NN neighbour count), Run / Cancel controls, the Stages panel
+  with per-stage **▶ Run** buttons for re-running an individual stage,
+  live log tail, and post-run actions.
 - **Past runs tab** — every prior run in your workspace listed
   newest-first with status, last step, and sample count. Open any row
   to attach it: result tabs render its artifacts, per-step Run buttons
@@ -43,7 +47,10 @@ The Shiny UI surfaces every stage interactively:
   every downstream view.
 - **Dim. reduction tab** — interactive plotly t-SNE, UMAP, and
   dendrogram. Color points by any metadata column from your samplesheet
-  (Sample_Group, Diagnosis, Batch, etc.).
+  (Sample_Group, Diagnosis, Batch, etc.). A **Reference projection**
+  sub-tab places your samples (dark diamonds) onto the chosen reference
+  cloud, with a per-sample table of nearest class, confidence, and
+  ambiguity / distance flags.
 - **CNV tab** — per-sample genome-wide CNV profile (PDF embed),
   population frequency plot, and an in-browser segment heatmap with a
   tunable color-scale cap.
@@ -78,7 +85,7 @@ Your IDATs  ─►  samplesheet.csv  ─►  Samplesheet tab (validate)
                                     Run tab (analyze)
                                           │
                                           ▼
-            QC ── Dim. red. ── CNV ── Report (review in app)
+    QC ── Dim. red. ── Ref. projection ── CNV ── Report (review in app)
                                           │
                                           ▼
                             self-contained HTML report
@@ -105,9 +112,12 @@ is reproducible and you keep your raw data alongside its outputs.
 - One run at a time. The app doesn't queue concurrent runs.
 - Sample-size envelope: 1–96 samples per run; tested up to 96 on a
   16 GB machine.
-- The Settings card exposes five tunable parameters (QC + dim.
-  reduction). Other pipeline knobs — normalization method, filtering
-  toggles, CNV threshold — are still at their defaults; expanding the
-  Settings surface is on the v1.2 roadmap.
+- The Settings card exposes tunable parameters across QC, dim.
+  reduction, reference projection, and CNV. Other pipeline knobs —
+  normalization method, filtering toggles — are still at their defaults;
+  expanding the Settings surface is on the v1.2 roadmap.
+- Reference projection uses a Python toolchain (openTSNE) that
+  provisions a self-contained environment on first use — a one-time
+  few-minute download, so the first projection run is slower.
 - The app listens only on `127.0.0.1` (loopback). It is not
   network-accessible, by construction.
