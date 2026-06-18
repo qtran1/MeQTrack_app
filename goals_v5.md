@@ -8,15 +8,27 @@ Current state: `MEQTRACK_VERSION = "2.2.2"` in
 `pipeline/methylation_pipeline.R`.
 
 This file targets **v2.3.0** — the next *minor* release, reserved for
-**sesame-based sample/experiment QC**: the **GCT bisulfite-conversion control
-score** (the anchor capability, which gates `Pass_QC`) plus two informational
-sample-integrity inferences — **predicted sex** and **Horvath epigenetic age**
-— for sample-swap detection. All three come from the sesame beta/SigDF path.
+**sesame-based sample/experiment QC**:
+
+1. **GCT bisulfite-conversion control score** — the anchor capability; it
+   **gates `Pass_QC`** (configurable threshold, exposed in the Settings UI).
+2. **Sample-integrity inferences** (informational, for sample-swap / purity
+   checks): **predicted sex** (`inferSex`), **Horvath epigenetic age**
+   (`predictAge` on a vendored clock model), and **leukocyte fraction**
+   (`estimateLeukocyte`, with an EPICv2→EPIC conversion so it works on all
+   array types).
+
+All come from the sesame beta/SigDF path. A small vendored `Anno/` directory
+(Zhou Lab annotation assets) backs the clock model and the EPICv2→EPIC map.
 Resist folding unrelated work into this scope.
 
 **Status — Phase 1 IMPLEMENTED, not yet released.** Work is on branch
-`preprocess-sesame-migration`. Phase 1 (EPIC/450k support) is code-complete and
-unit-verified; Phases 2–3 (EPICv2 coverage, packaging/release) remain.
+`preprocess-sesame-migration` (7 commits). Phase 1 (EPIC/450k GCT + all
+sample-integrity inferences, including EPICv2 leukocyte) is code-complete and
+verified end-to-end on the bundled EPIC example. Remaining: **Phase 2** =
+EPICv2 *GCT* coverage (the one EPICv2 gap left — GCT still records `NA` for v2);
+**Phase 3** = packaging/release. The P1-GATE regression check and a low-GCT
+fail-path UI check are still open (see Progress).
 
 ---
 
@@ -50,8 +62,9 @@ confirmed the `normalization` parameter (`raw`/`illumina`/`functional`/
 never set it, the pipeline hardcoded `prep = "QCDB"` for betas regardless, and
 the returned `result$normalization` was never read. Betas already come from
 sesame. v2.3.0 leaves the beta and minfi paths untouched and *adds* the GCT
-output. (The stale `normalization`-options claims in the README and the inert
-parameter itself are candidates for a later cleanup, not v2.3.0 scope.)
+output. (The misleading "normalization is configurable" line in the README was
+corrected as part of this work; the inert `normalization` *parameter* itself is
+left for a later cleanup, not v2.3.0 scope.)
 
 ## API facts — validated against installed sesame 1.30.0
 
@@ -182,11 +195,19 @@ stages `Anno/` into the release zip.
     `convert_epicv2_to_epic()`; `compute_sample_inferences()` converts EPICv2
     betas → EPIC and fills `Leukocyte_Fraction` (no longer NA). Map loaded once
     per batch. Verified on an EPICv2 example: leukocyte 0.0427.
-  - **Verified:** on the bundled example IDATs, GCT = 1.481 (HM450) and 1.11
-    (EPIC); EPICv2 → `NA` + note, no error. All four edited R files parse.
-  - **P1-GATE — PENDING.** Full pipeline run on an EPIC/450k example through the
-    app, confirming the "Conversion QC" tab renders with scores and tooltips,
-    and a regression check that `sample_qc_report.csv` / `Pass_QC` are unchanged.
+  - **Verified end-to-end** (`scripts/run_example.R`, EPIC example, 4 samples):
+    pipeline completes; `conversion_qc.csv` written with GCT 1.10–1.12;
+    `sample_qc_report.csv` carries `GCT_Score`, `Sesame_Sex` (FEMALE/FEMALE/
+    MALE/MALE), `Horvath_Age` (3.5–26.3y, `predictAge` matching the prior manual
+    84.1y on TCGA PAAD), and `Leukocyte_Fraction` (~0.016). EPICv2 example:
+    leukocyte 0.0427 via conversion; GCT correctly `NA` + note, no error. GCT
+    gating logic unit-checked (1.48 fails, 1.11 passes, NA passes, existing
+    detection-p failure unaffected). All edited R files parse.
+  - **P1-GATE — PARTIALLY DONE.** Pipeline run + CSV outputs verified above.
+    Still open: (a) open a completed run in the live Shiny app and confirm the
+    "Conversion QC" tab + new columns/tooltips render; (b) trigger a GCT failure
+    (e.g. `max_gct_score = 1.11`) and confirm the red fail-row + reason + banner;
+    (c) regression-confirm a pre-existing run's `Pass_QC` is unchanged.
 
 - **Phase 2 — EPICv2 coverage (NOT STARTED).**
   - P2-T1. Source the EPICv2 (and ideally MSA) Infinium-I C/T-extension probe
@@ -215,9 +236,10 @@ stages `Anno/` into the release zip.
 ## Scope discipline
 
 The GCT bisulfite-conversion score is the anchor capability of v2.3.0 (it gates
-`Pass_QC`); sesame sex + Horvath age ride along as informational
-sample-integrity columns. Phase 1 ships EPIC/450k GCT; Phase 2 extends GCT to
-EPICv2.
+`Pass_QC`); sesame sex, Horvath age, and leukocyte fraction ride along as
+informational sample-integrity columns. Phase 1 ships EPIC/450k GCT plus *all*
+sample-integrity inferences across array types (EPICv2 leukocyte works via the
+EPICv2→EPIC map). Phase 2 closes the last EPICv2 gap — *GCT* for EPICv2.
 
 **Explicitly out of scope:**
 - **Sex karyotype (`inferSexKaryotypes`) and ethnicity (`inferEthnicity`)** —

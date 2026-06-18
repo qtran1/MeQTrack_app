@@ -1,8 +1,9 @@
 # Anno — sesame annotation assets (vendored)
 
-Small annotation files used by the sesame-based QC steps. These are vendored
-(committed) rather than downloaded at runtime because they are tiny (a few KB
-each) and we want the pipeline to run offline.
+Annotation files used by the sesame-based QC steps. These are vendored
+(committed) rather than downloaded at runtime so the pipeline runs offline. The
+clock models are tiny (a few KB); the EPICv2→EPIC map is slimmed to 4.3 MB from
+a 115 MB source (the raw source stays gitignored — see below).
 
 ## Source
 
