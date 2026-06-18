@@ -206,7 +206,16 @@ run_pipeline <- function(step) {
     
     # Save beta values as a flat file
     write_beta_values(beta_values, file.path(dirs$processed, "beta_values.txt"))
-  } 
+
+    # Save the GCT bisulfite-conversion control table (sesame) as its own
+    # standalone QC table. Informational only — does not affect Pass_QC.
+    if (!is.null(result$gct)) {
+      write.csv(result$gct,
+                file.path(dirs$qc, "conversion_qc.csv"),
+                row.names = FALSE)
+      log_message("Conversion QC (GCT) saved: conversion_qc.csv", log_file)
+    }
+  }
   else if (step != "reference_projection") {
     # Load preprocessed data if not running preprocessing.
     # The reference-projection step is self-contained — it reads IDATs and

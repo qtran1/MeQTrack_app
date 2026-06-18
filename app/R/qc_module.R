@@ -27,6 +27,14 @@ QC_COL_TOOLTIPS <- list(
   SWAN_Recoverable        = "TRUE when SWAN normalization brings intensities above threshold — the low-intensity flag was a scanner-gain artifact, not a true failure."
 )
 
+# Tooltips for the standalone bisulfite-conversion (GCT) QC table.
+QC_CONVERSION_TOOLTIPS <- list(
+  Sample_ID  = "Sentrix ID identifying this sample.",
+  GCT_Score  = "Bisulfite-conversion control (GCT score, Zhou et al. 2017). A value near 1.0 means complete conversion; higher values indicate more residual incomplete conversion. Informational only — does not affect Pass_QC.",
+  Array_Type = "Array platform detected for this sample.",
+  Note       = "Empty when GCT was computed. Otherwise explains why it was skipped (e.g. EPICv2 not yet supported)."
+)
+
 qc_module_ui <- function(id) {
   ns <- shiny::NS(id)
   bslib::navset_tab(
@@ -35,6 +43,13 @@ qc_module_ui <- function(id) {
       shiny::uiOutput(ns("summary_banner")),
       shinycssloaders::withSpinner(
         DT::DTOutput(ns("qc_table")),
+        type = 7, color = COLORS$primary
+      )
+    ),
+    bslib::nav_panel(
+      "Conversion QC",
+      shinycssloaders::withSpinner(
+        DT::DTOutput(ns("conversion_table")),
         type = 7, color = COLORS$primary
       )
     ),
@@ -116,6 +131,31 @@ qc_module_server <- function(id, results) {
         )
       }
       dt
+    })
+
+    output$conversion_table <- DT::renderDT({
+      r <- results()
+      if (is.null(r) || is.null(r$conversion_qc)) return(NULL)
+      df <- r$conversion_qc
+      numeric_cols <- which(vapply(df, is.numeric, logical(1)))
+      DT::datatable(
+        df,
+        rownames = FALSE,
+        selection = "none",
+        class = "stripe hover compact",
+        width = "100%",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          autoWidth = FALSE,
+          dom = "ltip",
+          headerCallback = dt_header_tooltips(QC_CONVERSION_TOOLTIPS),
+          columnDefs = if (length(numeric_cols)) list(list(
+            className = "dt-right",
+            targets = as.integer(numeric_cols - 1L)
+          )) else list()
+        )
+      )
     })
 
     output$density_frame <- shiny::renderUI({

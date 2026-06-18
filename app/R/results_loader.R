@@ -7,6 +7,7 @@
 # NULL when there is no completed run, or a list with:
 #   run_dir         absolute path to the run directory
 #   qc_report       data.frame — per-sample QC table (sample_qc_report.csv)
+#   conversion_qc   data.frame — GCT bisulfite-conversion QC (conversion_qc.csv) or NULL
 #   qc_fail_ids     character  — Sample_IDs that failed QC
 #   sample_info     data.frame — sample metadata (processed_data/sample_info.txt)
 #   tsne            list(coords, sample_info, duplicates)   or NULL
@@ -24,6 +25,7 @@
 # File layout produced by the pipeline (relative to run_dir):
 RESULTS_PATHS <- list(
   qc_report       = file.path("qc", "sample_qc_report.csv"),
+  conversion_qc   = file.path("qc", "conversion_qc.csv"),
   qc_rdata        = file.path("qc", "qc_results.RData"),
   sample_info     = file.path("processed_data", "sample_info.txt"),
   tsne_rdata      = file.path("dimensionality_reduction", "tsne_results.RData"),
@@ -64,6 +66,14 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
     as.character(qc_report$Sample_ID[!as.logical(qc_report$Pass_QC)])
   } else character(0)
 
+  conversion_qc_path <- file.path(run_dir, RESULTS_PATHS$conversion_qc)
+  conversion_qc <- if (file.exists(conversion_qc_path)) {
+    tryCatch(
+      utils::read.csv(conversion_qc_path, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
+  } else NULL
+
   sample_info_path <- file.path(run_dir, RESULTS_PATHS$sample_info)
   sample_info <- if (file.exists(sample_info_path)) {
     tryCatch(
@@ -83,7 +93,7 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
 
   # If literally nothing is on disk yet (very early in a run), don't return
   # a hollow bundle — let consumers keep showing the "no run yet" empty state.
-  if (is.null(qc_report) && is.null(sample_info) &&
+  if (is.null(qc_report) && is.null(conversion_qc) && is.null(sample_info) &&
       is.null(tsne) && is.null(umap) && is.null(hclust) && is.null(cnv) &&
       is.null(reference_projection)) {
     return(NULL)
@@ -94,6 +104,7 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
   list(
     run_dir       = run_dir,
     qc_report     = qc_report,
+    conversion_qc = conversion_qc,
     qc_fail_ids   = qc_fail_ids,
     sample_info   = sample_info,
     tsne          = tsne,

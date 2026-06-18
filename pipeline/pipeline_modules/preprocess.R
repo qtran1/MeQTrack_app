@@ -206,6 +206,81 @@ read_methylation_data <- function(sample_sheet, array_type = "auto") {
   return(rgset)
 }
 
+#' Compute per-sample GCT bisulfite-conversion control score
+#'
+#' GCT (Zhou et al. 2017) quantifies residual *incomplete* bisulfite
+#' conversion from the Infinium-I C/T-extension probes. A score near 1.0
+#' indicates complete conversion; higher values indicate more incomplete
+#' conversion. This is the specific QC metric sesame provides that minfi does
+#' not, and the reason preprocessing reads IDATs through sesame.
+#'
+#' sesame::bisConversionControl() auto-fetches the required extension probes
+#' only for EPIC and HM450 (450k). EPICv2/MSA need extR/extA supplied manually
+#' (Phase 2), so those array types return NA with an explanatory note rather
+#' than erroring. The metric is informational only — it never gates Pass_QC.
+#'
+#' @param basenames IDAT basename prefixes (sample_sheet$Basename)
+#' @param sample_ids Per-sample identifiers, aligned to basenames order
+#' @param array_type Array type ("450k", "EPIC", "EPICv2", ...)
+#' @param bpparam BiocParallel backend (reused from the caller)
+#' @return data.frame with Sample_ID, GCT_Score, Array_Type, Note (one row/sample)
+compute_gct_scores <- function(basenames, sample_ids, array_type, bpparam) {
+  # Auto-fetch of C/T-extension probes only works for EPIC/HM450.
+  if (!toupper(array_type) %in% c("EPIC", "450K")) {
+    message("GCT bisulfite-conversion control not yet supported for array type '",
+            array_type, "' — emitting NA (Phase 2: EPICv2 ext probes).")
+    return(data.frame(
+      Sample_ID  = sample_ids,
+      GCT_Score  = NA_real_,
+      Array_Type = array_type,
+      Note       = "GCT not yet supported for this array type (Phase 2: EPICv2 ext probes)",
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  message("Computing GCT bisulfite-conversion control scores...")
+  # prep = "C" (inferInfiniumIChannel) is the minimal prep bisConversionControl
+  # needs: it reads InfIR(sdf), which requires Infinium-I channel assignment.
+  # Heavier prep (noob/dyebias) would distort the raw extension-probe signal.
+  scores <- tryCatch(
+    sesame::openSesame(basenames, prep = "C",
+                       func = sesame::bisConversionControl,
+                       BPPARAM = bpparam),
+    error = function(e) {
+      warning("GCT computation failed (", conditionMessage(e),
+              "); recording NA for all samples.")
+      NULL
+    }
+  )
+
+  if (is.null(scores)) {
+    return(data.frame(
+      Sample_ID  = sample_ids,
+      GCT_Score  = NA_real_,
+      Array_Type = array_type,
+      Note       = "GCT computation failed; see pipeline log",
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  # openSesame returns a named numeric vector (names = IDAT prefixes/basenames),
+  # in the same order as `basenames`. Align by position to sample_ids.
+  scores <- as.numeric(scores)
+  if (length(scores) != length(sample_ids)) {
+    warning("GCT score count (", length(scores), ") != sample count (",
+            length(sample_ids), "); results may be misaligned.")
+    length(scores) <- length(sample_ids)  # pad/truncate with NA to keep shape
+  }
+
+  data.frame(
+    Sample_ID  = sample_ids,
+    GCT_Score  = round(scores, 4),
+    Array_Type = array_type,
+    Note       = ifelse(is.na(scores), "GCT not computed for this sample", ""),
+    stringsAsFactors = FALSE
+  )
+}
+
 #' Preprocess methylation data
 #'
 #' @param sample_sheet Sample sheet data frame
@@ -214,7 +289,7 @@ read_methylation_data <- function(sample_sheet, array_type = "auto") {
 #' @param threads Number of CPU threads to use
 #' @param output_dir Output directory
 #' @return List containing preprocessed data
-preprocess_methylation <- function(sample_sheet, array_type = "auto", 
+preprocess_methylation <- function(sample_sheet, array_type = "auto",
                                    normalization = "swan", 
                                    threads = 6,
                                    output_dir = ".") {
@@ -266,8 +341,8 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   }
 
   ####If EPICv2, then use sesame to prepare idats and extract beta values
-  ## The prep = "CDPB" function will allow for technical corrections to be made.
-  ## Specifically, C = Infer infinium I channel, D = dyeBiasNL, B = Noob Normalisation
+  ## prep = "QCDB" applies these technical corrections (left-to-right):
+  ## Q = qualityMask, C = infer Infinium-I channel, D = dyeBiasNL, B = Noob.
   if (array_type == "EPICv2"){
     beta_v2 <- sesame::openSesame(sample_sheet$Basename, prep = "QCDB", platform= "EPICv2", func = getBetas, BPPARAM=bpparam,
                                   collapseToPfx = TRUE, collapseMethod = "mean")
@@ -327,6 +402,23 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
 
   fwrite(detection_p_df, file=file.path(output_dir, "detection_p.txt"), row.names=TRUE, sep="\t")
   m_values = BetaValueToMValue(beta)
+
+  # Resolve the concrete array type once (the param may still be "auto").
+  resolved_array_type <- if (array_type == "auto") determine_array_type(rgset) else array_type
+
+  # GCT bisulfite-conversion control (sesame). Aligned to sample_info$Sample_ID
+  # (= Sentrix_ID), the same per-sample identifier used elsewhere. Wrapped so a
+  # GCT failure can never break preprocessing.
+  gct <- tryCatch(
+    compute_gct_scores(sample_sheet$Basename, sample_info$Sample_ID,
+                       resolved_array_type, bpparam),
+    error = function(e) {
+      warning("compute_gct_scores() errored (", conditionMessage(e),
+              "); skipping GCT table.")
+      NULL
+    }
+  )
+
   message("Done Preprocessing!")
   write.table(sample_info, file=file.path(output_dir, "sample_info.txt"), row.names=TRUE, sep="\t")
 
@@ -337,7 +429,8 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
     m_values = m_values,
     detection_p = detection_p_df,
     sample_info = sample_info,
-    array_type = if (array_type == "auto") determine_array_type(rgset) else array_type,
+    gct = gct,
+    array_type = resolved_array_type,
     normalization = normalization
     )
 
