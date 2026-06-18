@@ -47,3 +47,7 @@ dist/
 .vscode/
 .idea/
 *.swp
+
+# Raw EPICv2->EPIC conversion benchmark (115 MB) — only the slim
+# 3-column map (EPICv2ToEPIC_map.tsv.gz) is committed and used.
+Anno/EPICv2/EPICv2ToEPIC_conversion.tsv

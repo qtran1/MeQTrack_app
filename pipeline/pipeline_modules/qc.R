@@ -1,3 +1,21 @@
+#' Resolve a file under the vendored \code{Anno/} annotation dir
+#'
+#' The pipeline \code{setwd()}s into \code{pipeline/}, so \code{Anno/} sits one
+#' level up. Probe a few candidate locations to stay robust to how the module
+#' was sourced.
+#'
+#' @param rel_path Path relative to \code{Anno/} (e.g. "HM450/Clock_Horvath353.rds")
+#' @return The first existing absolute/relative path, or NA_character_ if none.
+find_anno_file <- function(rel_path) {
+  candidates <- c(
+    file.path("..", "Anno", rel_path),
+    file.path("Anno", rel_path),
+    file.path(getwd(), "..", "Anno", rel_path)
+  )
+  hit <- candidates[file.exists(candidates)]
+  if (length(hit)) hit[1] else NA_character_
+}
+
 #' Locate the vendored Horvath353 epigenetic-clock model
 #'
 #' The model ships in the project's \code{Anno/} dir (from the Zhou Lab
@@ -9,21 +27,58 @@
 #'
 #' @return The loaded clock model list, or NULL if it cannot be found/read.
 load_horvath_model <- function() {
-  # The pipeline setwd()s into pipeline/, so Anno/ sits one level up. Probe a
-  # few candidate locations to stay robust to how the module was sourced.
-  candidates <- c(
-    file.path("..", "Anno", "HM450", "Clock_Horvath353.rds"),
-    file.path("Anno", "HM450", "Clock_Horvath353.rds"),
-    file.path(getwd(), "..", "Anno", "HM450", "Clock_Horvath353.rds")
-  )
-  hit <- candidates[file.exists(candidates)]
-  if (!length(hit)) {
+  path <- find_anno_file(file.path("HM450", "Clock_Horvath353.rds"))
+  if (is.na(path)) {
     warning("Horvath353 clock model not found under Anno/HM450/; age skipped.")
     return(NULL)
   }
-  tryCatch(readRDS(hit[1]), error = function(e) {
+  tryCatch(readRDS(path), error = function(e) {
     warning("Could not read Horvath353 model: ", conditionMessage(e)); NULL
   })
+}
+
+#' Convert a collapsed EPICv2 beta vector into EPIC (v1) probe space
+#'
+#' Uses the Zhou Lab EPICv2->EPIC map (\code{Anno/EPICv2/EPICv2ToEPIC_map.tsv.gz},
+#' a slim 3-column form of \code{EPICv2ToEPIC_conversion.tsv}). In that table the
+#' EPICv2 base probe ID (suffix stripped) always equals the EPIC1 ID, and our
+#' EPICv2 betas are already collapsed to base \code{cg} IDs — so conversion is a
+#' reliability-filtered probe subset: keep probes whose EPIC1 target is
+#' well-calibrated (\code{big_delta == FALSE}), drop the rest. This unlocks the
+#' EPIC-only \code{estimateLeukocyte} for EPICv2 samples.
+#'
+#' @return Character vector of reliable EPIC probe IDs, or NULL if map missing.
+load_epicv2_reliable_epic_probes <- function() {
+  path <- find_anno_file(file.path("EPICv2", "EPICv2ToEPIC_map.tsv.gz"))
+  if (is.na(path)) {
+    warning("EPICv2->EPIC map not found under Anno/EPICv2/; ",
+            "EPICv2 leukocyte estimation skipped.")
+    return(NULL)
+  }
+  map <- tryCatch(
+    utils::read.delim(path, stringsAsFactors = FALSE),
+    error = function(e) { warning("Could not read EPICv2->EPIC map: ",
+                                  conditionMessage(e)); NULL }
+  )
+  if (is.null(map)) return(NULL)
+  unique(map$ID_EPIC1[map$big_delta == "FALSE"])
+}
+
+#' Convert a collapsed EPICv2 beta vector into EPIC (v1) probe space
+#'
+#' In the Zhou Lab EPICv2->EPIC map the EPICv2 base probe ID (suffix stripped)
+#' always equals the EPIC1 ID, and our EPICv2 betas are already collapsed to
+#' base \code{cg} IDs — so conversion is a reliability-filtered probe subset:
+#' keep probes whose EPIC1 target is well-calibrated, drop the rest.
+#'
+#' @param betas Named numeric vector of collapsed EPICv2 betas (base cg IDs)
+#' @param reliable Reliable EPIC probe IDs from load_epicv2_reliable_epic_probes()
+#' @return Beta vector restricted to reliable EPIC probes, or NULL if none match
+convert_epicv2_to_epic <- function(betas, reliable) {
+  if (is.null(reliable)) return(NULL)
+  keep <- intersect(names(betas), reliable)
+  if (!length(keep)) return(NULL)
+  betas[keep]
 }
 
 #' Per-sample sesame sample-integrity inferences (sex, age, leukocyte fraction)
@@ -62,15 +117,25 @@ compute_sample_inferences <- function(beta_values, array_type = NULL) {
   }
 
   # Leukocyte fraction — sesame::estimateLeukocyte (reference from sesameData).
-  # Supported platforms: EPIC, HM450, HM27. EPICv2 has no leukocyte reference
-  # in this sesame version -> leave NA.
-  leuko_platform <- switch(toupper(as.character(array_type)),
-                           "450K" = "HM450", "EPIC" = "EPIC", NULL)
-  if (!is.null(leuko_platform)) {
+  # estimateLeukocyte supports EPIC/HM450/HM27 only. EPICv2 has no native
+  # leukocyte reference, so we first convert EPICv2 betas into EPIC space via
+  # the Zhou Lab EPICv2->EPIC map, then estimate on the EPIC platform.
+  at <- toupper(as.character(array_type))
+  leuko_platform <- switch(at, "450K" = "HM450", "EPIC" = "EPIC",
+                           "EPICV2" = "EPIC", NULL)
+  convert_v2 <- identical(at, "EPICV2")
+  # Load the EPICv2->EPIC reliable-probe set once (not per sample).
+  reliable <- if (convert_v2) load_epicv2_reliable_epic_probes() else NULL
+  if (!is.null(leuko_platform) && !(convert_v2 && is.null(reliable))) {
     out$Leukocyte_Fraction <- round(vapply(sample_ids, function(sid) {
-      tryCatch(as.numeric(sesame::estimateLeukocyte(beta_values[, sid],
-                                                    platform = leuko_platform)),
-               error = function(e) NA_real_)
+      tryCatch({
+        b <- beta_values[, sid]
+        if (convert_v2) {
+          b <- convert_epicv2_to_epic(b, reliable)
+          if (is.null(b)) return(NA_real_)
+        }
+        as.numeric(sesame::estimateLeukocyte(b, platform = leuko_platform))
+      }, error = function(e) NA_real_)
     }, numeric(1)), 4)
   }
   out

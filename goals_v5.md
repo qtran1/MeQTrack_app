@@ -108,9 +108,11 @@ sample-swap detection and tumour-purity gauging:
   beta matrices. `load_horvath_model()` resolves the path robustly from the
   pipeline working dir.
 - **`Leukocyte_Fraction`** — sesame `estimateLeukocyte(betas, platform)` (0–1),
-  its reference (`leukocyte.betas`) from sesameData (already cached, no Anno
-  file needed). EPIC/450k only; **NA for EPICv2** (no leukocyte reference in
-  this sesame version).
+  its reference (`leukocyte.betas`) from sesameData (already cached). Works for
+  450k/EPIC directly; for **EPICv2** the betas are first converted to EPIC space
+  via the Zhou Lab `EPICv2ToEPIC_map.tsv.gz` (a reliability-filtered probe
+  subset — see below), then estimated on the EPIC platform. So EPICv2 now gets
+  a real leukocyte fraction instead of NA.
 
 All three are **informational only** — none affects `Pass_QC`. **Not available
 in sesame 1.30.0:** `inferSexKaryotypes` (XaY-style karyotype) and
@@ -120,12 +122,17 @@ questions*).
 ### Vendored annotation — `Anno/`
 
 `Anno/` mirrors the upstream `zhou-lab/InfiniumAnnotationV1/Anno` layout and
-holds small (~6 KB) sesame annotation assets committed to the repo (they're
-tiny, unlike the gitignored 345 MB reference β-matrices). Currently:
-`HM450/Clock_Horvath353.rds` (used) and `EPICv2/Clock_Horvath353.EPICv2.345.rds`
+holds sesame annotation assets committed to the repo. Currently:
+`HM450/Clock_Horvath353.rds` (~6 KB, used), `EPICv2/Clock_Horvath353.EPICv2.345.rds`
 (kept for a future EPICv2-native age path — unused now because its suffixed
-probe IDs don't match our collapsed betas). `Anno/README.md` records provenance.
-`build_release.sh` stages `Anno/` into the release zip.
+probe IDs don't match our collapsed betas), and
+`EPICv2/EPICv2ToEPIC_map.tsv.gz` (4.3 MB, the slim 3-column EPICv2→EPIC map).
+The raw 115 MB `EPICv2ToEPIC_conversion.tsv` is **gitignored** — only the slim
+map (derived via `cut -f1,2,9 | gzip`) is committed. In that map the EPICv2
+base ID always equals the EPIC1 ID, so converting our (already collapsed)
+EPICv2 betas to EPIC space is a reliability-filtered probe subset (drop
+`big_delta == TRUE`). `Anno/README.md` records provenance; `build_release.sh`
+stages `Anno/` into the release zip.
 
 ## Progress
 
@@ -169,6 +176,12 @@ probe IDs don't match our collapsed betas). `Anno/README.md` records provenance.
     matched: 84.1y). Added leukocyte fraction via `estimateLeukocyte()`
     (EPIC/450k; NA EPICv2). `build_release.sh` bundles `Anno/`. Verified end-to-
     end from the pipeline working dir: model loads, age 84.1y, leukocyte 0.20.
+  - P1-T10. EPICv2 leukocyte via conversion — committed the slim
+    `Anno/EPICv2/EPICv2ToEPIC_map.tsv.gz` (raw 115 MB gitignored); `qc.R`
+    adds `find_anno_file()`, `load_epicv2_reliable_epic_probes()`, and
+    `convert_epicv2_to_epic()`; `compute_sample_inferences()` converts EPICv2
+    betas → EPIC and fills `Leukocyte_Fraction` (no longer NA). Map loaded once
+    per batch. Verified on an EPICv2 example: leukocyte 0.0427.
   - **Verified:** on the bundled example IDATs, GCT = 1.481 (HM450) and 1.11
     (EPIC); EPICv2 → `NA` + note, no error. All four edited R files parse.
   - **P1-GATE — PENDING.** Full pipeline run on an EPIC/450k example through the

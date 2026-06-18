@@ -25,7 +25,7 @@ QC_COL_TOOLTIPS <- list(
   Flag_GCT                = "TRUE when the GCT score exceeds the conversion threshold (default 1.3) — incomplete bisulfite conversion. Contributes to Pass_QC (fails the sample).",
   Sesame_Sex              = "Predicted sex from sesame's curated X/Y probe model (MALE/FEMALE). Informational — compare against expected sex and the minfi prediction to catch sample swaps.",
   Horvath_Age             = "Predicted epigenetic age (years) from the Horvath 353-CpG clock (Horvath 2013). Informational — a large gap from the known age can flag a mislabelled sample.",
-  Leukocyte_Fraction      = "Estimated leukocyte (white-blood-cell) fraction from sesame's two-component model (0–1). Informational — gauges immune/normal-cell contamination in a tumour sample. EPIC/450k only; NA for EPICv2.",
+  Leukocyte_Fraction      = "Estimated leukocyte (white-blood-cell) fraction from sesame's two-component model (0–1). Informational — gauges immune/normal-cell contamination in a tumour sample. EPICv2 is converted to EPIC space (Zhou Lab map) so it works across 450k/EPIC/EPICv2.",
   Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
   SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",
