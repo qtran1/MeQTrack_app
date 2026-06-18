@@ -32,10 +32,13 @@ reason preprocessing reads IDATs through sesame at all. The pipeline already
 derived betas and pOOBAH detection-p via `sesame::openSesame()`; this capability
 adds `sesame::bisConversionControl()` alongside them.
 
-The metric is **informational only** — it does **not** gate `Pass_QC`. This
-mirrors how the existing low-intensity note behaves: surfaced for the user's
-judgement, never an automatic failure. GCT-based pass/fail gating is explicitly
-out of scope (see *Scope discipline*).
+The metric **gates `Pass_QC`**: a sample whose GCT exceeds
+`config$qc$max_gct_score` (default **1.3**) **fails** QC, with a
+`Failure_Reason` and a dedicated `Flag_GCT` column, exactly like the
+detection-p and failed-probe checks — so it also triggers sample removal when
+`filter_failed_samples` is on. Samples with an **NA** GCT (e.g. EPICv2 in
+Phase 1, where GCT is not yet computed) are **never** failed on it — an
+unmeasured score is not a failing score.
 
 ## What this is NOT
 
@@ -68,15 +71,19 @@ parameter itself are candidates for a later cleanup, not v2.3.0 scope.)
 - GCT is **not** part of `sesameQC` / `sesameQC_calcStats`; it must be called
   directly.
 
-## Output — its own table
+## Outputs — standalone table + QC gate
 
-Rather than wedging GCT into the minfi-based `sample_qc_report.csv`, it is
-emitted as a standalone **`qc/conversion_qc.csv`** with columns
-`Sample_ID, GCT_Score, Array_Type, Note`. Reasons: it is computed on a
-different (sesame SigDF) code path than the main QC table; EPICv2 rows are
-explicitly `NA` + note, which reads cleanly in a dedicated table; and it is
-purely additive — zero risk to the validated Pass/Fail logic. The app surfaces
-it as a "Conversion QC" tab next to "Sample metrics".
+GCT surfaces in two places:
+
+1. **Standalone `qc/conversion_qc.csv`** (`Sample_ID, GCT_Score, Array_Type,
+   Note`), written by the preprocess step. It is computed on a different
+   (sesame SigDF) code path than the main QC table, and EPICv2 rows are
+   explicitly `NA` + note, which reads cleanly in a dedicated table. The app
+   surfaces it as a "Conversion QC" tab next to "Sample metrics".
+2. **`sample_qc_report.csv` gate**: the preprocess GCT table is passed into
+   `perform_qc()`, which merges `GCT_Score` and a `Flag_GCT` column into the
+   main QC table and folds `Flag_GCT` into `Pass_QC` / `Failure_Reason`. The
+   threshold is `config$qc$max_gct_score` (default 1.3). NA scores never fail.
 
 ## Progress
 
@@ -99,6 +106,13 @@ it as a "Conversion QC" tab next to "Sample metrics".
     `QC_CONVERSION_TOOLTIPS` column help.
   - P1-T5. Docs — `pipeline/README.md` documents the GCT output and corrects
     the misleading "normalization is configurable" claim.
+  - P1-T6. QC gating — `qc.R` `perform_qc()` gains `gct` / `max_gct_score`
+    params, merges `GCT_Score` + `Flag_GCT` into `sample_qc`, folds `Flag_GCT`
+    into `Pass_QC` and `Failure_Reason`, and exposes `gct_failed_samples`.
+    `methylation_pipeline.R` threads `result$gct` (from both the fresh-preprocess
+    and reload-from-RData branches) and reads `config$qc$max_gct_score`;
+    `config.R` defaults it to 1.3. NA GCT never fails; old preprocessed data
+    without `$gct` degrades gracefully (gating disabled).
   - **Verified:** on the bundled example IDATs, GCT = 1.481 (HM450) and 1.11
     (EPIC); EPICv2 → `NA` + note, no error. All four edited R files parse.
   - **P1-GATE — PENDING.** Full pipeline run on an EPIC/450k example through the
@@ -135,8 +149,6 @@ The GCT bisulfite-conversion score is the only marquee capability of v2.3.0.
 Phase 1 ships EPIC/450k; Phase 2 extends to EPICv2.
 
 **Explicitly out of scope:**
-- GCT-based gating of `Pass_QC` — kept informational, matching the low-intensity
-  note. A future release may add an opt-in threshold.
 - Removing/repairing the inert `normalization` parameter and its stale
   user-facing strings — a separate cleanup, not this capability.
 - Any other sesame QC metric (e.g. `sesameQC_calcStats` intensity/detection
@@ -144,9 +156,10 @@ Phase 1 ships EPIC/450k; Phase 2 extends to EPICv2.
 
 ## Open questions still to resolve
 
-- **Threshold:** is there a defensible GCT cutoff (literature or cohort-derived)
-  we'd eventually flag on? Phase 1 reports the raw value only; gating is
-  deferred until a cutoff is justified.
+- **Threshold:** the GCT fail cutoff is `config$qc$max_gct_score`, default
+  **1.3** (a pragmatic middle ground — ~1.0 is ideal, and the bundled HM450
+  example at 1.48 fails while the EPIC example at 1.11 passes). Open: validate
+  this default against a real cohort / literature and adjust if warranted.
 - **EPICv2 ext probes:** does `sesameData`'s `EPICv2.probeInfo` actually expose
   `typeI.extC` / `typeI.extT`? If not, Phase 2 must derive them from the
   manifest — decide the source before starting P2-T1.

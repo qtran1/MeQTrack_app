@@ -21,6 +21,8 @@ QC_COL_TOOLTIPS <- list(
   Pass_QC                 = "TRUE = sample passed both the mean-detection-p and failed-probe checks.",
   Flag_Mean_DetP          = "TRUE when the sample's mean detection-p exceeds the cohort threshold (default 0.05).",
   Flag_Failed_Probes      = "TRUE when the failed-probe percent reaches the threshold (default 25%).",
+  GCT_Score               = "Bisulfite-conversion control (GCT, Zhou et al. 2017). ~1.0 = complete conversion; higher = more incomplete. NA when not computed (e.g. EPICv2).",
+  Flag_GCT                = "TRUE when the GCT score exceeds the conversion threshold (default 1.3) — incomplete bisulfite conversion. Contributes to Pass_QC (fails the sample).",
   Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
   SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",

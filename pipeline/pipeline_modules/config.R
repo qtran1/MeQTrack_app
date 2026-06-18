@@ -77,6 +77,7 @@ default_config <- function() {
       sample_detection_p_threshold   = 0.05,
       failed_probe_percent_threshold = 25,
       min_median_intensity           = 10.5,
+      max_gct_score                  = 1.3,   # GCT bisulfite-conversion fail cutoff (~1.0 = complete)
       filter_failed_samples          = TRUE
     ),
 

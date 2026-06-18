@@ -203,7 +203,8 @@ run_pipeline <- function(step) {
     sample_info <- result$sample_info
     detection_p <- result$detection_p
     array_type <- result$array_type
-    
+    gct_table <- result$gct
+
     # Save beta values as a flat file
     write_beta_values(beta_values, file.path(dirs$processed, "beta_values.txt"))
 
@@ -251,7 +252,8 @@ run_pipeline <- function(step) {
       sample_info <- result$sample_info
       detection_p <- result$detection_p
       array_type <- result$array_type
-      
+      gct_table <- result$gct
+
       # Debug: Check if rgset exists
       if (is.null(rgset)) {
         message("WARNING: rgset is NULL in preprocessed data. Some analyses may not work properly.")
@@ -280,7 +282,12 @@ run_pipeline <- function(step) {
     sample_detection_p_threshold   <- 0.05   # Default value
     failed_probe_percent_threshold <- 25     # Default value
     min_median_intensity           <- 10.5   # Default value
+    max_gct_score                  <- 1.3    # GCT bisulfite-conversion fail cutoff
     filter_failed_samples          <- TRUE   # Default value
+
+    # GCT table may be absent (old preprocessed data, or qc step run in
+    # isolation before this version). NULL disables GCT gating gracefully.
+    if (!exists("gct_table")) gct_table <- NULL
 
     if (!is.null(config$qc)) {
       if (!is.null(config$qc$detection_p_threshold))
@@ -291,6 +298,8 @@ run_pipeline <- function(step) {
         failed_probe_percent_threshold <- config$qc$failed_probe_percent_threshold
       if (!is.null(config$qc$min_median_intensity))
         min_median_intensity <- config$qc$min_median_intensity
+      if (!is.null(config$qc$max_gct_score))
+        max_gct_score <- config$qc$max_gct_score
       if (!is.null(config$qc$filter_failed_samples))
         filter_failed_samples <- config$qc$filter_failed_samples
     }
@@ -303,6 +312,8 @@ run_pipeline <- function(step) {
       sample_detection_p_threshold   = sample_detection_p_threshold,
       failed_probe_percent_threshold = failed_probe_percent_threshold,
       min_median_intensity           = min_median_intensity,
+      gct                            = gct_table,
+      max_gct_score                  = max_gct_score,
       output_dir = dirs$qc,
       plots_dir  = dirs$figures_qc
     )

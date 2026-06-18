@@ -7,6 +7,13 @@
 #' @param sample_detection_p_threshold Threshold for mean sample detection p-values
 #' @param failed_probe_percent_threshold Max allowed percent of failed probes per sample
 #' @param min_median_intensity Minimum acceptable median intensity (log2) for bisulfite check
+#' @param gct Optional data frame of GCT bisulfite-conversion scores
+#'   (columns Sample_ID, GCT_Score) from the preprocess step. When supplied,
+#'   samples whose GCT exceeds \code{max_gct_score} fail QC. Samples with NA
+#'   GCT (e.g. EPICv2, where GCT is not yet computed) are never failed on it.
+#' @param max_gct_score GCT failure threshold. A score near 1.0 means complete
+#'   bisulfite conversion; higher means more incomplete. Samples with
+#'   GCT > max_gct_score fail QC.
 #' @param output_dir Output directory for QC data/report (CSV, RData)
 #' @param plots_dir  Output directory for QC plots (PDF/HTML). Defaults to
 #'                   \code{file.path(output_dir, "plots")} for backward compat.
@@ -16,6 +23,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
                        sample_detection_p_threshold   = 0.05,
                        failed_probe_percent_threshold = 25,
                        min_median_intensity           = 10.5,
+                       gct                            = NULL,
+                       max_gct_score                  = 1.3,
                        output_dir = ".",
                        plots_dir  = NULL) {
 
@@ -70,8 +79,23 @@ perform_qc <- function(rgset, beta_values, sample_info,
   sample_qc$Note_Low_Intensity <- sample_qc$Median_Meth_Intensity   < min_median_intensity |
                                   sample_qc$Median_Unmeth_Intensity  < min_median_intensity
 
-  # Pass/fail based on detection p and failed probe rate only
-  sample_qc$Pass_QC <- !(sample_qc$Flag_Mean_DetP | sample_qc$Flag_Failed_Probes)
+  # ---------------------------------------------------------------------------
+  # GCT bisulfite-conversion gate. Merge the per-sample GCT score (from the
+  # preprocess step) and fail samples whose conversion is too incomplete.
+  # NA GCT (e.g. EPICv2, not yet computed) is never a failure — Flag_GCT FALSE.
+  # ---------------------------------------------------------------------------
+  sample_qc$GCT_Score <- NA_real_
+  if (!is.null(gct) && all(c("Sample_ID", "GCT_Score") %in% names(gct))) {
+    gct_lookup <- setNames(gct$GCT_Score, as.character(gct$Sample_ID))
+    sample_qc$GCT_Score <- as.numeric(gct_lookup[sample_qc$Sample_ID])
+  }
+  sample_qc$Flag_GCT <- !is.na(sample_qc$GCT_Score) &
+                        sample_qc$GCT_Score > max_gct_score
+
+  # Pass/fail based on detection p, failed probe rate, and GCT conversion.
+  sample_qc$Pass_QC <- !(sample_qc$Flag_Mean_DetP |
+                         sample_qc$Flag_Failed_Probes |
+                         sample_qc$Flag_GCT)
 
   # ---------------------------------------------------------------------------
   # SWAN recovery check for low-intensity samples
@@ -137,6 +161,10 @@ perform_qc <- function(rgset, beta_values, sample_info,
       reasons <- c(reasons, sprintf("Failed probes (%.2f%%) >= %.1f%%",
                                     as.numeric(r["Failed_Probes_Percent"]),
                                     failed_probe_percent_threshold))
+    if (isTRUE(as.logical(r["Flag_GCT"])))
+      reasons <- c(reasons, sprintf("Incomplete bisulfite conversion (GCT %.3f > %.2f)",
+                                    as.numeric(r["GCT_Score"]),
+                                    max_gct_score))
     if (length(reasons) == 0) "PASS" else paste(reasons, collapse = "; ")
   })
 
@@ -175,7 +203,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
   key_cols  <- c("Sample_ID", "Pass_QC", "Failure_Reason", "Notes",
                  "Mean_Detection_P", "Failed_Probes_Count", "Failed_Probes_Percent",
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
-                 "Flag_Mean_DetP", "Flag_Failed_Probes", "Note_Low_Intensity",
+                 "GCT_Score",
+                 "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)
   col_order  <- c(intersect(key_cols, names(sample_qc)), extra_cols)
@@ -227,6 +256,16 @@ perform_qc <- function(rgset, beta_values, sample_info,
     for (i in seq_len(nrow(low_df)))
       message(sprintf("  %s: %s", low_df$Sample_ID[i], low_df$Notes[i]))
   }
+  n_gct_fail <- sum(sample_qc$Flag_GCT)
+  if (n_gct_fail > 0) {
+    message(sprintf(
+      "%d sample(s) FAILED for incomplete bisulfite conversion (GCT > %.2f):",
+      n_gct_fail, max_gct_score
+    ))
+    gct_df <- sample_qc[sample_qc$Flag_GCT, c("Sample_ID", "GCT_Score")]
+    for (i in seq_len(nrow(gct_df)))
+      message(sprintf("  %s: GCT %.3f", gct_df$Sample_ID[i], gct_df$GCT_Score[i]))
+  }
 
   list(
     sample_qc                    = sample_qc,
@@ -235,9 +274,11 @@ perform_qc <- function(rgset, beta_values, sample_info,
     low_intensity_samples        = sample_qc$Sample_ID[sample_qc$Note_Low_Intensity],
     swan_recoverable             = sample_qc$Sample_ID[sample_qc$SWAN_Recoverable %in% TRUE],
     swan_not_recoverable         = sample_qc$Sample_ID[sample_qc$SWAN_Recoverable %in% FALSE],
+    gct_failed_samples           = sample_qc$Sample_ID[sample_qc$Flag_GCT],
     detection_p                  = detP,
     detection_p_threshold        = detection_p_threshold,
     sample_detection_p_threshold = sample_detection_p_threshold,
+    max_gct_score                = max_gct_score,
     plots                        = qc_plots
   )
 }
