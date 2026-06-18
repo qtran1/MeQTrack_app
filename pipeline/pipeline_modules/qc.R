@@ -1,3 +1,68 @@
+#' Predicted age from the Horvath 353-CpG epigenetic clock (Horvath 2013)
+#'
+#' Computed directly from the Horvath353 coefficient table shipped in
+#' sesameData's \code{age.inference}. NOTE: sesame 1.30.0's \code{predictAge()}
+#' is incompatible with this bundled data (it expects a newer model object with
+#' a \code{param$slope}/\code{response2age} structure), so we apply the linear
+#' model and Horvath's inverse age transform ourselves.
+#'
+#' @param betas Named numeric vector of beta values (names = cg probe IDs)
+#' @param horvath Horvath353 coefficient data frame (CpGmarker, CoefficientTraining)
+#' @param min_probes Minimum matched clock probes required; below this -> NA
+#' @return Predicted age in years, or NA if too few probes match
+horvath_age <- function(betas, horvath, min_probes = 200) {
+  intercept <- horvath$CoefficientTraining[horvath$CpGmarker == "(Intercept)"]
+  keep      <- horvath$CpGmarker != "(Intercept)"
+  cg        <- horvath$CpGmarker[keep]
+  coef      <- horvath$CoefficientTraining[keep]
+  b         <- betas[cg]
+  ok        <- !is.na(b)
+  if (sum(ok) < min_probes) return(NA_real_)
+  s <- intercept + sum(coef[ok] * b[ok])
+  # Horvath 2013 inverse age transform (adult.age = 20)
+  adult_age <- 20
+  if (s < 0) (1 + adult_age) * exp(s) - 1 else (1 + adult_age) * s + adult_age
+}
+
+#' Per-sample sesame sample-integrity inferences (sex + epigenetic age)
+#'
+#' These are valuable for detecting sample swaps / mislabelling. Sex uses
+#' sesame's curated X/Y probe model; age uses the Horvath353 clock. Both
+#' operate on the beta matrix already computed upstream. Wrapped so a failure
+#' (e.g. unsupported platform, missing sesameData cache) yields NA, never an
+#' error. sesame 1.30.0 does not provide karyotype or ethnicity inference.
+#'
+#' @param beta_values Beta matrix (probes x samples)
+#' @return data.frame(Sample_ID, Sesame_Sex, Horvath_Age)
+compute_sample_inferences <- function(beta_values) {
+  sample_ids <- colnames(beta_values)
+  out <- data.frame(Sample_ID = sample_ids,
+                    Sesame_Sex = NA_character_,
+                    Horvath_Age = NA_real_,
+                    stringsAsFactors = FALSE)
+
+  # Sex — sesame::inferSex auto-detects platform from probe names.
+  out$Sesame_Sex <- vapply(sample_ids, function(sid) {
+    tryCatch(as.character(sesame::inferSex(beta_values[, sid])),
+             error = function(e) NA_character_)
+  }, character(1))
+
+  # Age — Horvath353 from sesameData's age.inference table.
+  horvath <- tryCatch(sesameData::sesameDataGet("age.inference")$Horvath353,
+                      error = function(e) {
+                        warning("Could not load Horvath353 age model: ",
+                                conditionMessage(e))
+                        NULL
+                      })
+  if (!is.null(horvath)) {
+    out$Horvath_Age <- round(vapply(sample_ids, function(sid) {
+      tryCatch(horvath_age(beta_values[, sid], horvath),
+               error = function(e) NA_real_)
+    }, numeric(1)), 1)
+  }
+  out
+}
+
 #' Perform quality control on methylation data
 #'
 #' @param rgset RGChannelSet object
@@ -66,6 +131,28 @@ perform_qc <- function(rgset, beta_values, sample_info,
     stringsAsFactors = FALSE,
     row.names = NULL
   )
+
+  # ---------------------------------------------------------------------------
+  # Sample-integrity inferences (sesame): predicted sex + Horvath epigenetic
+  # age. Informational only — surfaced for sample-swap / mislabelling checks,
+  # they do NOT contribute to Pass_QC. Aligned to sample_qc by Sample_ID.
+  # ---------------------------------------------------------------------------
+  message("Inferring sample sex and epigenetic age (sesame)...")
+  inferences <- tryCatch(
+    compute_sample_inferences(beta_values),
+    error = function(e) {
+      warning("Sample inference (sex/age) failed: ", conditionMessage(e))
+      NULL
+    }
+  )
+  sample_qc$Sesame_Sex  <- NA_character_
+  sample_qc$Horvath_Age <- NA_real_
+  if (!is.null(inferences)) {
+    sex_lookup <- setNames(inferences$Sesame_Sex,  inferences$Sample_ID)
+    age_lookup <- setNames(inferences$Horvath_Age, inferences$Sample_ID)
+    sample_qc$Sesame_Sex  <- as.character(sex_lookup[sample_qc$Sample_ID])
+    sample_qc$Horvath_Age <- as.numeric(age_lookup[sample_qc$Sample_ID])
+  }
 
   # ---------------------------------------------------------------------------
   # Failure flags — NOTE: low intensity is INFORMATIONAL ONLY, not a failure.
@@ -203,7 +290,7 @@ perform_qc <- function(rgset, beta_values, sample_info,
   key_cols  <- c("Sample_ID", "Pass_QC", "Failure_Reason", "Notes",
                  "Mean_Detection_P", "Failed_Probes_Count", "Failed_Probes_Percent",
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
-                 "GCT_Score",
+                 "GCT_Score", "Sesame_Sex", "Horvath_Age",
                  "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)

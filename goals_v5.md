@@ -1,4 +1,4 @@
-# goals_v5 — v2.3.0 release scope: sesame bisulfite-conversion QC (GCT)
+# goals_v5 — v2.3.0 release scope: sesame sample/experiment QC
 
 `goals_v4.md` was the v2.0.0 → v2.1.0 release scope (the reference-projection
 marquee capability plus the Capper and sarcoma reference datasets). It shipped
@@ -7,10 +7,12 @@ notice suppression, reference-projection docs, COMET dataset relabelling).
 Current state: `MEQTRACK_VERSION = "2.2.2"` in
 `pipeline/methylation_pipeline.R`.
 
-This file targets **v2.3.0** — the next *minor* release, reserved for one
-capability: surfacing the **GCT bisulfite-conversion control score** (sesame)
-in the QC outputs. v2.3.0 is one capability, not a basket of small
-improvements. Resist the urge to fold unrelated work into this scope.
+This file targets **v2.3.0** — the next *minor* release, reserved for
+**sesame-based sample/experiment QC**: the **GCT bisulfite-conversion control
+score** (the anchor capability, which gates `Pass_QC`) plus two informational
+sample-integrity inferences — **predicted sex** and **Horvath epigenetic age**
+— for sample-swap detection. All three come from the sesame beta/SigDF path.
+Resist folding unrelated work into this scope.
 
 **Status — Phase 1 IMPLEMENTED, not yet released.** Work is on branch
 `preprocess-sesame-migration`. Phase 1 (EPIC/450k support) is code-complete and
@@ -83,7 +85,30 @@ GCT surfaces in two places:
 2. **`sample_qc_report.csv` gate**: the preprocess GCT table is passed into
    `perform_qc()`, which merges `GCT_Score` and a `Flag_GCT` column into the
    main QC table and folds `Flag_GCT` into `Pass_QC` / `Failure_Reason`. The
-   threshold is `config$qc$max_gct_score` (default 1.3). NA scores never fail.
+   threshold is `config$qc$max_gct_score` (default 1.3, exposed in the Settings
+   UI). NA scores never fail.
+
+## Sample-integrity inferences (sex + age)
+
+Two informational columns in `sample_qc_report.csv`, computed in `perform_qc()`
+from the beta matrix (so no preprocess threading), for sample-swap detection:
+
+- **`Sesame_Sex`** — sesame `inferSex(betas)` → MALE/FEMALE (curated X/Y probe
+  model, auto-detects platform). Complements the existing minfi `getSex`
+  prediction; a mismatch flags a likely swap.
+- **`Horvath_Age`** — Horvath 353-CpG epigenetic age (Horvath 2013), computed
+  **manually** from sesameData's `age.inference$Horvath353` coefficient table
+  and Horvath's inverse age transform. **Why manual:** sesame 1.30.0's
+  `predictAge()` expects a newer model object (`param$slope` /
+  `response2age`), which is **incompatible** with the legacy coefficient table
+  the pinned sesameData 1.30.0 ships — so calling `predictAge()` aborts. The
+  ~15-line manual model sidesteps the version mismatch and is fully
+  reproducible.
+
+Both are **informational only** — they do not affect `Pass_QC`. **Not available
+in sesame 1.30.0:** `inferSexKaryotypes` (XaY-style karyotype) and
+`inferEthnicity` were removed/never present in this version; they would require
+a sesame upgrade (deferred, see *Open questions*).
 
 ## Progress
 
@@ -113,6 +138,15 @@ GCT surfaces in two places:
     and reload-from-RData branches) and reads `config$qc$max_gct_score`;
     `config.R` defaults it to 1.3. NA GCT never fails; old preprocessed data
     without `$gct` degrades gracefully (gating disabled).
+  - P1-T7. Settings UI — `app/R/settings_module.R` adds a "Max GCT" numeric
+    input (default 1.3) wired through the param bag, past-run restore, and
+    `pipeline_bridge.R` `.write_run_config` (`config$qc$max_gct_score`).
+  - P1-T8. Sample-integrity inferences — `qc.R` adds `horvath_age()` and
+    `compute_sample_inferences()` (sesame `inferSex` + manual Horvath353),
+    called in `perform_qc()` to add `Sesame_Sex` / `Horvath_Age` columns;
+    `qc_module.R` tooltips. Informational, never gates `Pass_QC`. Verified:
+    Horvath matched 353/353 probes (age 84.1y on TCGA PAAD); `inferSex` returns
+    MALE/FEMALE per column with auto platform detection.
   - **Verified:** on the bundled example IDATs, GCT = 1.481 (HM450) and 1.11
     (EPIC); EPICv2 → `NA` + note, no error. All four edited R files parse.
   - **P1-GATE — PENDING.** Full pipeline run on an EPIC/450k example through the
@@ -145,10 +179,16 @@ GCT surfaces in two places:
 
 ## Scope discipline
 
-The GCT bisulfite-conversion score is the only marquee capability of v2.3.0.
-Phase 1 ships EPIC/450k; Phase 2 extends to EPICv2.
+The GCT bisulfite-conversion score is the anchor capability of v2.3.0 (it gates
+`Pass_QC`); sesame sex + Horvath age ride along as informational
+sample-integrity columns. Phase 1 ships EPIC/450k GCT; Phase 2 extends GCT to
+EPICv2.
 
 **Explicitly out of scope:**
+- **Sex karyotype (`inferSexKaryotypes`) and ethnicity (`inferEthnicity`)** —
+  not present in the pinned sesame 1.30.0; they need a sesame/sesameData
+  upgrade. Deferred (see *Open questions*). We ship plain `inferSex`
+  (MALE/FEMALE) instead.
 - Removing/repairing the inert `normalization` parameter and its stale
   user-facing strings — a separate cleanup, not this capability.
 - Any other sesame QC metric (e.g. `sesameQC_calcStats` intensity/detection
@@ -166,3 +206,8 @@ Phase 1 ships EPIC/450k; Phase 2 extends to EPICv2.
 - **Report surfacing (P3-T2):** include the conversion table in the shareable
   HTML report, or keep it app-only? Leaning toward including it for parity with
   the main QC table.
+- **sesame upgrade for karyotype/ethnicity:** a newer sesame/sesameData would
+  restore `inferSexKaryotypes` (XaY/XaXi), `inferEthnicity`, and a `predictAge`
+  compatible with the bundled clock models. Worth it only if those signals are
+  wanted — weigh against `renv.lock` churn and pipeline-wide compatibility
+  (minfi interop, the basilisk/snifter stack). Not v2.3.0.

@@ -23,6 +23,8 @@ QC_COL_TOOLTIPS <- list(
   Flag_Failed_Probes      = "TRUE when the failed-probe percent reaches the threshold (default 25%).",
   GCT_Score               = "Bisulfite-conversion control (GCT, Zhou et al. 2017). ~1.0 = complete conversion; higher = more incomplete. NA when not computed (e.g. EPICv2).",
   Flag_GCT                = "TRUE when the GCT score exceeds the conversion threshold (default 1.3) — incomplete bisulfite conversion. Contributes to Pass_QC (fails the sample).",
+  Sesame_Sex              = "Predicted sex from sesame's curated X/Y probe model (MALE/FEMALE). Informational — compare against expected sex and the minfi prediction to catch sample swaps.",
+  Horvath_Age             = "Predicted epigenetic age (years) from the Horvath 353-CpG clock (Horvath 2013). Informational — a large gap from the known age can flag a mislabelled sample.",
   Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
   SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",
