@@ -24,6 +24,7 @@
 SETTINGS_DEFAULTS <- list(
   qc_detection_p          = 0.01,
   qc_failed_pct           = 25,
+  qc_max_gct              = 1.3,
   dim_variable_probes     = 10000L,
   dim_tsne_perplexity     = 5L,
   dim_umap_neighbors      = 15L,
@@ -85,6 +86,20 @@ settings_module_ui <- function(id) {
             )
           ),
           value = d$qc_failed_pct, min = 0, max = 100, step = 1
+        ),
+        shiny::numericInput(
+          ns("qc_max_gct"),
+          .settings_label(
+            "Max GCT (bisulfite conversion)", d$qc_max_gct,
+            paste(
+              "GCT bisulfite-conversion control score (sesame, Zhou et al.",
+              "2017). A value near 1.0 means complete conversion; higher",
+              "means more incomplete. A sample whose GCT exceeds this value",
+              "fails QC. Samples without a GCT score (e.g. EPICv2) are never",
+              "failed on it."
+            )
+          ),
+          value = d$qc_max_gct, min = 1, max = 5, step = 0.05
         )
       ),
       shiny::div(
@@ -258,6 +273,8 @@ settings_module_server <- function(id, attach_run = shiny::reactive(NULL)) {
           input$qc_detection_p, SETTINGS_DEFAULTS$qc_detection_p),
         qc.failed_probe_percent_threshold = numeric_or_default(
           input$qc_failed_pct, SETTINGS_DEFAULTS$qc_failed_pct),
+        qc.max_gct_score                  = numeric_or_default(
+          input$qc_max_gct, SETTINGS_DEFAULTS$qc_max_gct),
         dim.variable_probes               = integer_or_default(
           input$dim_variable_probes, SETTINGS_DEFAULTS$dim_variable_probes),
         dim.tsne_perplexity               = integer_or_default(
@@ -352,6 +369,7 @@ apply_params_to_inputs <- function(session, params) {
   pairs <- list(
     qc_detection_p      = params$qc.detection_p_threshold,
     qc_failed_pct       = params$qc.failed_probe_percent_threshold,
+    qc_max_gct          = params$qc.max_gct_score,
     dim_variable_probes = params$dim.variable_probes,
     dim_tsne_perplexity = params$dim.tsne_perplexity,
     dim_umap_neighbors  = params$dim.umap_n_neighbors,

@@ -213,6 +213,9 @@ bridge_kill <- function(handle) {
     cfg$qc$failed_probe_percent_threshold <-
       parameters$qc.failed_probe_percent_threshold
   }
+  if (!is.null(parameters$qc.max_gct_score)) {
+    cfg$qc$max_gct_score <- parameters$qc.max_gct_score
+  }
   if (!is.null(parameters$dim.variable_probes)) {
     cfg$dim_reduction$variable_probes <- parameters$dim.variable_probes
   }
