@@ -314,6 +314,7 @@ run_pipeline <- function(step) {
       min_median_intensity           = min_median_intensity,
       gct                            = gct_table,
       max_gct_score                  = max_gct_score,
+      array_type                     = array_type,
       output_dir = dirs$qc,
       plots_dir  = dirs$figures_qc
     )

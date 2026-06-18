@@ -1,44 +1,49 @@
-#' Predicted age from the Horvath 353-CpG epigenetic clock (Horvath 2013)
+#' Locate the vendored Horvath353 epigenetic-clock model
 #'
-#' Computed directly from the Horvath353 coefficient table shipped in
-#' sesameData's \code{age.inference}. NOTE: sesame 1.30.0's \code{predictAge()}
-#' is incompatible with this bundled data (it expects a newer model object with
-#' a \code{param$slope}/\code{response2age} structure), so we apply the linear
-#' model and Horvath's inverse age transform ourselves.
+#' The model ships in the project's \code{Anno/} dir (from the Zhou Lab
+#' InfiniumAnnotation repo) in sesame \code{predictAge()}-compatible form
+#' (\code{intercept}/\code{param$slope}/\code{response2age}). We use the HM450
+#' clock for every array type because its probe IDs are base \code{cg} form,
+#' matching our (collapsed) beta matrices — including EPICv2, whose betas are
+#' collapsed to base CpG IDs upstream.
 #'
-#' @param betas Named numeric vector of beta values (names = cg probe IDs)
-#' @param horvath Horvath353 coefficient data frame (CpGmarker, CoefficientTraining)
-#' @param min_probes Minimum matched clock probes required; below this -> NA
-#' @return Predicted age in years, or NA if too few probes match
-horvath_age <- function(betas, horvath, min_probes = 200) {
-  intercept <- horvath$CoefficientTraining[horvath$CpGmarker == "(Intercept)"]
-  keep      <- horvath$CpGmarker != "(Intercept)"
-  cg        <- horvath$CpGmarker[keep]
-  coef      <- horvath$CoefficientTraining[keep]
-  b         <- betas[cg]
-  ok        <- !is.na(b)
-  if (sum(ok) < min_probes) return(NA_real_)
-  s <- intercept + sum(coef[ok] * b[ok])
-  # Horvath 2013 inverse age transform (adult.age = 20)
-  adult_age <- 20
-  if (s < 0) (1 + adult_age) * exp(s) - 1 else (1 + adult_age) * s + adult_age
+#' @return The loaded clock model list, or NULL if it cannot be found/read.
+load_horvath_model <- function() {
+  # The pipeline setwd()s into pipeline/, so Anno/ sits one level up. Probe a
+  # few candidate locations to stay robust to how the module was sourced.
+  candidates <- c(
+    file.path("..", "Anno", "HM450", "Clock_Horvath353.rds"),
+    file.path("Anno", "HM450", "Clock_Horvath353.rds"),
+    file.path(getwd(), "..", "Anno", "HM450", "Clock_Horvath353.rds")
+  )
+  hit <- candidates[file.exists(candidates)]
+  if (!length(hit)) {
+    warning("Horvath353 clock model not found under Anno/HM450/; age skipped.")
+    return(NULL)
+  }
+  tryCatch(readRDS(hit[1]), error = function(e) {
+    warning("Could not read Horvath353 model: ", conditionMessage(e)); NULL
+  })
 }
 
-#' Per-sample sesame sample-integrity inferences (sex + epigenetic age)
+#' Per-sample sesame sample-integrity inferences (sex, age, leukocyte fraction)
 #'
-#' These are valuable for detecting sample swaps / mislabelling. Sex uses
-#' sesame's curated X/Y probe model; age uses the Horvath353 clock. Both
-#' operate on the beta matrix already computed upstream. Wrapped so a failure
-#' (e.g. unsupported platform, missing sesameData cache) yields NA, never an
-#' error. sesame 1.30.0 does not provide karyotype or ethnicity inference.
+#' Valuable for detecting sample swaps / mislabelling and gauging tumour
+#' purity. Sex uses sesame's curated X/Y probe model; age uses the Horvath353
+#' clock via sesame::predictAge(); leukocyte fraction uses sesame's two-
+#' component model (EPIC/HM450 only). All operate on the beta matrix already
+#' computed upstream, each wrapped so a failure yields NA rather than an error.
+#' sesame 1.30.0 provides no karyotype or ethnicity inference.
 #'
 #' @param beta_values Beta matrix (probes x samples)
-#' @return data.frame(Sample_ID, Sesame_Sex, Horvath_Age)
-compute_sample_inferences <- function(beta_values) {
+#' @param array_type Array type ("450k","EPIC","EPICv2"); drives leukocyte platform
+#' @return data.frame(Sample_ID, Sesame_Sex, Horvath_Age, Leukocyte_Fraction)
+compute_sample_inferences <- function(beta_values, array_type = NULL) {
   sample_ids <- colnames(beta_values)
   out <- data.frame(Sample_ID = sample_ids,
                     Sesame_Sex = NA_character_,
                     Horvath_Age = NA_real_,
+                    Leukocyte_Fraction = NA_real_,
                     stringsAsFactors = FALSE)
 
   # Sex — sesame::inferSex auto-detects platform from probe names.
@@ -47,18 +52,26 @@ compute_sample_inferences <- function(beta_values) {
              error = function(e) NA_character_)
   }, character(1))
 
-  # Age — Horvath353 from sesameData's age.inference table.
-  horvath <- tryCatch(sesameData::sesameDataGet("age.inference")$Horvath353,
-                      error = function(e) {
-                        warning("Could not load Horvath353 age model: ",
-                                conditionMessage(e))
-                        NULL
-                      })
-  if (!is.null(horvath)) {
+  # Age — Horvath353 via the proper sesame::predictAge() on the vendored model.
+  model <- load_horvath_model()
+  if (!is.null(model)) {
     out$Horvath_Age <- round(vapply(sample_ids, function(sid) {
-      tryCatch(horvath_age(beta_values[, sid], horvath),
+      tryCatch(as.numeric(sesame::predictAge(beta_values[, sid], model)),
                error = function(e) NA_real_)
     }, numeric(1)), 1)
+  }
+
+  # Leukocyte fraction — sesame::estimateLeukocyte (reference from sesameData).
+  # Supported platforms: EPIC, HM450, HM27. EPICv2 has no leukocyte reference
+  # in this sesame version -> leave NA.
+  leuko_platform <- switch(toupper(as.character(array_type)),
+                           "450K" = "HM450", "EPIC" = "EPIC", NULL)
+  if (!is.null(leuko_platform)) {
+    out$Leukocyte_Fraction <- round(vapply(sample_ids, function(sid) {
+      tryCatch(as.numeric(sesame::estimateLeukocyte(beta_values[, sid],
+                                                    platform = leuko_platform)),
+               error = function(e) NA_real_)
+    }, numeric(1)), 4)
   }
   out
 }
@@ -79,6 +92,8 @@ compute_sample_inferences <- function(beta_values) {
 #' @param max_gct_score GCT failure threshold. A score near 1.0 means complete
 #'   bisulfite conversion; higher means more incomplete. Samples with
 #'   GCT > max_gct_score fail QC.
+#' @param array_type Array type ("450k","EPIC","EPICv2"); used to pick the
+#'   leukocyte-fraction reference platform. NULL skips leukocyte estimation.
 #' @param output_dir Output directory for QC data/report (CSV, RData)
 #' @param plots_dir  Output directory for QC plots (PDF/HTML). Defaults to
 #'                   \code{file.path(output_dir, "plots")} for backward compat.
@@ -90,6 +105,7 @@ perform_qc <- function(rgset, beta_values, sample_info,
                        min_median_intensity           = 10.5,
                        gct                            = NULL,
                        max_gct_score                  = 1.3,
+                       array_type                     = NULL,
                        output_dir = ".",
                        plots_dir  = NULL) {
 
@@ -137,21 +153,24 @@ perform_qc <- function(rgset, beta_values, sample_info,
   # age. Informational only — surfaced for sample-swap / mislabelling checks,
   # they do NOT contribute to Pass_QC. Aligned to sample_qc by Sample_ID.
   # ---------------------------------------------------------------------------
-  message("Inferring sample sex and epigenetic age (sesame)...")
+  message("Inferring sample sex, epigenetic age, and leukocyte fraction (sesame)...")
   inferences <- tryCatch(
-    compute_sample_inferences(beta_values),
+    compute_sample_inferences(beta_values, array_type = array_type),
     error = function(e) {
-      warning("Sample inference (sex/age) failed: ", conditionMessage(e))
+      warning("Sample inference (sex/age/leukocyte) failed: ", conditionMessage(e))
       NULL
     }
   )
-  sample_qc$Sesame_Sex  <- NA_character_
-  sample_qc$Horvath_Age <- NA_real_
+  sample_qc$Sesame_Sex         <- NA_character_
+  sample_qc$Horvath_Age        <- NA_real_
+  sample_qc$Leukocyte_Fraction <- NA_real_
   if (!is.null(inferences)) {
-    sex_lookup <- setNames(inferences$Sesame_Sex,  inferences$Sample_ID)
-    age_lookup <- setNames(inferences$Horvath_Age, inferences$Sample_ID)
-    sample_qc$Sesame_Sex  <- as.character(sex_lookup[sample_qc$Sample_ID])
-    sample_qc$Horvath_Age <- as.numeric(age_lookup[sample_qc$Sample_ID])
+    sex_lookup   <- setNames(inferences$Sesame_Sex,         inferences$Sample_ID)
+    age_lookup   <- setNames(inferences$Horvath_Age,        inferences$Sample_ID)
+    leuko_lookup <- setNames(inferences$Leukocyte_Fraction, inferences$Sample_ID)
+    sample_qc$Sesame_Sex         <- as.character(sex_lookup[sample_qc$Sample_ID])
+    sample_qc$Horvath_Age        <- as.numeric(age_lookup[sample_qc$Sample_ID])
+    sample_qc$Leukocyte_Fraction <- as.numeric(leuko_lookup[sample_qc$Sample_ID])
   }
 
   # ---------------------------------------------------------------------------
@@ -290,7 +309,7 @@ perform_qc <- function(rgset, beta_values, sample_info,
   key_cols  <- c("Sample_ID", "Pass_QC", "Failure_Reason", "Notes",
                  "Mean_Detection_P", "Failed_Probes_Count", "Failed_Probes_Percent",
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
-                 "GCT_Score", "Sesame_Sex", "Horvath_Age",
+                 "GCT_Score", "Sesame_Sex", "Horvath_Age", "Leukocyte_Fraction",
                  "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)

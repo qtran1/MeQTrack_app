@@ -88,27 +88,44 @@ GCT surfaces in two places:
    threshold is `config$qc$max_gct_score` (default 1.3, exposed in the Settings
    UI). NA scores never fail.
 
-## Sample-integrity inferences (sex + age)
+## Sample-integrity inferences (sex + age + leukocyte fraction)
 
-Two informational columns in `sample_qc_report.csv`, computed in `perform_qc()`
-from the beta matrix (so no preprocess threading), for sample-swap detection:
+Three informational columns in `sample_qc_report.csv`, computed in
+`perform_qc()` from the beta matrix (so no preprocess threading), for
+sample-swap detection and tumour-purity gauging:
 
 - **`Sesame_Sex`** — sesame `inferSex(betas)` → MALE/FEMALE (curated X/Y probe
   model, auto-detects platform). Complements the existing minfi `getSex`
   prediction; a mismatch flags a likely swap.
-- **`Horvath_Age`** — Horvath 353-CpG epigenetic age (Horvath 2013), computed
-  **manually** from sesameData's `age.inference$Horvath353` coefficient table
-  and Horvath's inverse age transform. **Why manual:** sesame 1.30.0's
-  `predictAge()` expects a newer model object (`param$slope` /
-  `response2age`), which is **incompatible** with the legacy coefficient table
-  the pinned sesameData 1.30.0 ships — so calling `predictAge()` aborts. The
-  ~15-line manual model sidesteps the version mismatch and is fully
-  reproducible.
+- **`Horvath_Age`** — Horvath 353-CpG epigenetic age (Horvath 2013) via the
+  proper sesame `predictAge(betas, model)`. The model is **vendored** at
+  `Anno/HM450/Clock_Horvath353.rds` (from the Zhou Lab InfiniumAnnotation repo)
+  in `predictAge()`-compatible form (`intercept`/`param$slope`/`response2age`).
+  **Why vendored:** the `age.inference` data shipped in the pinned sesameData
+  1.30.0 is the *legacy* coefficient table, incompatible with the installed
+  `predictAge()` — so we supply the structured model file instead. The HM450
+  clock (base `cg` IDs) is used for all array types, matching our collapsed
+  beta matrices. `load_horvath_model()` resolves the path robustly from the
+  pipeline working dir.
+- **`Leukocyte_Fraction`** — sesame `estimateLeukocyte(betas, platform)` (0–1),
+  its reference (`leukocyte.betas`) from sesameData (already cached, no Anno
+  file needed). EPIC/450k only; **NA for EPICv2** (no leukocyte reference in
+  this sesame version).
 
-Both are **informational only** — they do not affect `Pass_QC`. **Not available
+All three are **informational only** — none affects `Pass_QC`. **Not available
 in sesame 1.30.0:** `inferSexKaryotypes` (XaY-style karyotype) and
-`inferEthnicity` were removed/never present in this version; they would require
-a sesame upgrade (deferred, see *Open questions*).
+`inferEthnicity`; they would require a sesame upgrade (deferred, see *Open
+questions*).
+
+### Vendored annotation — `Anno/`
+
+`Anno/` mirrors the upstream `zhou-lab/InfiniumAnnotationV1/Anno` layout and
+holds small (~6 KB) sesame annotation assets committed to the repo (they're
+tiny, unlike the gitignored 345 MB reference β-matrices). Currently:
+`HM450/Clock_Horvath353.rds` (used) and `EPICv2/Clock_Horvath353.EPICv2.345.rds`
+(kept for a future EPICv2-native age path — unused now because its suffixed
+probe IDs don't match our collapsed betas). `Anno/README.md` records provenance.
+`build_release.sh` stages `Anno/` into the release zip.
 
 ## Progress
 
@@ -141,12 +158,17 @@ a sesame upgrade (deferred, see *Open questions*).
   - P1-T7. Settings UI — `app/R/settings_module.R` adds a "Max GCT" numeric
     input (default 1.3) wired through the param bag, past-run restore, and
     `pipeline_bridge.R` `.write_run_config` (`config$qc$max_gct_score`).
-  - P1-T8. Sample-integrity inferences — `qc.R` adds `horvath_age()` and
-    `compute_sample_inferences()` (sesame `inferSex` + manual Horvath353),
-    called in `perform_qc()` to add `Sesame_Sex` / `Horvath_Age` columns;
-    `qc_module.R` tooltips. Informational, never gates `Pass_QC`. Verified:
-    Horvath matched 353/353 probes (age 84.1y on TCGA PAAD); `inferSex` returns
-    MALE/FEMALE per column with auto platform detection.
+  - P1-T8. Sample-integrity inferences — `qc.R` `compute_sample_inferences()`
+    (sesame `inferSex` + Horvath age + leukocyte fraction), called in
+    `perform_qc()` to add `Sesame_Sex` / `Horvath_Age` / `Leukocyte_Fraction`
+    columns; `qc_module.R` tooltips. Informational, never gates `Pass_QC`.
+  - P1-T9. Vendored clock model + proper `predictAge()` — committed
+    `Anno/HM450/Clock_Horvath353.rds` (+ EPICv2 variant, unused) from the Zhou
+    Lab repo; `load_horvath_model()` reads it and age now uses
+    `sesame::predictAge()` (replacing the earlier manual Horvath math, which
+    matched: 84.1y). Added leukocyte fraction via `estimateLeukocyte()`
+    (EPIC/450k; NA EPICv2). `build_release.sh` bundles `Anno/`. Verified end-to-
+    end from the pipeline working dir: model loads, age 84.1y, leukocyte 0.20.
   - **Verified:** on the bundled example IDATs, GCT = 1.481 (HM450) and 1.11
     (EPIC); EPICv2 → `NA` + note, no error. All four edited R files parse.
   - **P1-GATE — PENDING.** Full pipeline run on an EPIC/450k example through the

@@ -128,6 +128,11 @@ rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
 rsync -a --exclude=".DS_Store" --exclude="beta_*.csv" \
   reference/ "${stage_dir}/reference/"
 
+# Anno/: small vendored sesame annotation assets (Horvath clock models). The
+# QC step reads load_horvath_model() from here, so the zip MUST include it.
+rsync -a --exclude=".DS_Store" \
+  Anno/ "${stage_dir}/Anno/"
+
 # renv/: ship activator, settings, and .gitignore only — never library/.
 mkdir -p "${stage_dir}/renv"
 for f in activate.R settings.json .gitignore; do
@@ -165,6 +170,7 @@ required=(
   "reference/beta_GSE305405_1915samples_top10K.rds"
   "reference/tSNE_embedding_GSE305405_top10K.RData"
   "reference/COMET_Labkey_August_12_2025.csv"
+  "Anno/HM450/Clock_Horvath353.rds"
   "reference/beta_GSE90496_top10K.rds"
   "reference/tSNE_embedding_GSE90496_top10K.RData"
   "reference/GSE90496_MC_MCF_color_labels_key.csv"
