@@ -99,18 +99,87 @@ convert_epicv2_to_epic <- function(betas, reliable) {
   betas[keep]
 }
 
-#' Per-sample sesame sample-integrity inferences (sex, age, leukocyte fraction)
+#' Base probe ID — strip the EPICv2 replicate suffix (cg00000029_TC21 -> cg00000029)
+#' so probe sets match whether betas are collapsed or suffixed.
+base_probe_id <- function(x) sub("_.*$", "", x)
+
+#' X-linked (X-inactivation-informative) probe set for the platform, base cg IDs.
+#' EPICv2 base IDs equal EPIC1 IDs, so EPIC's curated set applies to EPICv2 too.
+load_xlinked_probes <- function(array_type) {
+  ds <- switch(toupper(as.character(array_type)),
+               "450K" = "HM450.probeInfo", "EPIC" = "EPIC.probeInfo",
+               "EPICV2" = "EPIC.probeInfo", NULL)
+  if (is.null(ds)) return(NULL)
+  tryCatch(sesameDataGet(ds)$chrX.xlinked, error = function(e) {
+    warning("X-linked probe set unavailable for karyotype: ", conditionMessage(e))
+    NULL
+  })
+}
+
+#' Infer a coarse sex karyotype from inferSex + X-inactivation heterozygosity.
+#' Two active X chromosomes methylate X-linked CpGs to intermediate beta
+#' (X-inactivation), so the fraction of X-linked probes with 0.3<beta<0.7
+#' (X_het) cleanly separates two-X (~0.48) from one-X (~0.13) across EPIC/450k.
+#' Combined with the MALE/FEMALE call this yields XX / XY and flags the two
+#' realistically detectable aneuploidies as uncertain guesses (XXY? = male +
+#' two-X; X0? = female + one-X). We deliberately avoid Y-channel intensity,
+#' which is unreliable on degraded samples and would spuriously flag Turner.
+#' Returns NA when sex is unknown or too few X-linked probes survive.
+infer_karyotype <- function(beta_sample, sex, xlinked) {
+  if (is.null(xlinked) || is.na(sex))
+    return(list(karyotype = NA_character_, x_het = NA_real_))
+  bx <- beta_sample[base_probe_id(names(beta_sample)) %in% xlinked]
+  bx <- bx[!is.na(bx)]
+  if (length(bx) < 50) return(list(karyotype = NA_character_, x_het = NA_real_))
+  x_het <- mean(bx > 0.3 & bx < 0.7)
+  two_x <- x_het > 0.32
+  one_x <- x_het < 0.25
+  kary <- if (sex == "FEMALE" && two_x) "XX"
+          else if (sex == "MALE"   && one_x) "XY"
+          else if (sex == "MALE"   && two_x) "XXY? (uncertain - verify)"
+          else if (sex == "FEMALE" && one_x) "X0? (uncertain - verify)"
+          else if (sex == "FEMALE") "XX"            # ambiguous X_het: trust sex
+          else "XY"
+  list(karyotype = kary, x_het = round(x_het, 3))
+}
+
+#' rs-SNP genotype fingerprint for sample-swap / identity matching. The ~59-65
+#' Infinium rs probes genotype germline SNPs (beta ~0/0.5/1 -> AA/AB/BB), a
+#' per-individual barcode: two arrays from the same person share ~all calls.
+#' Replaces the removed sesame inferEthnicity (its model was dropped upstream)
+#' with the sample-integrity signal actually wanted. Ordered by probe ID for
+#' cross-sample comparability. Returns the genotype string and usable-SNP count.
+#' Genotypes are encoded as letters A/H/B (AA / AB heterozygous / BB), NOT
+#' digits: an all-digit string round-trips through read.csv as a number (a 60+
+#' digit value collapses to scientific-notation garbage); letters stay character.
+snp_fingerprint <- function(beta_sample) {
+  rs <- beta_sample[grepl("^rs", base_probe_id(names(beta_sample)))]
+  if (!length(rs)) return(list(fingerprint = NA_character_, n_snp = 0L))
+  # Order by probe ID over the FULL rs set and keep NA probes as "." so position
+  # i is the same SNP in every sample on a platform — required for the strings
+  # to be comparable across samples (the sample-matching use case).
+  rs <- rs[order(base_probe_id(names(rs)))]
+  geno <- ifelse(is.na(rs), ".",
+                 ifelse(rs < 1 / 3, "A", ifelse(rs > 2 / 3, "B", "H")))
+  list(fingerprint = paste(geno, collapse = ""), n_snp = sum(!is.na(rs)))
+}
+
+#' Per-sample sesame sample-integrity inferences (sex, karyotype, age,
+#' leukocyte fraction, SNP fingerprint)
 #'
 #' Valuable for detecting sample swaps / mislabelling and gauging tumour
-#' purity. Sex uses sesame's curated X/Y probe model; age uses the Horvath353
-#' clock via sesame::predictAge(); leukocyte fraction uses sesame's two-
-#' component model (EPIC/HM450 only). All operate on the beta matrix already
-#' computed upstream, each wrapped so a failure yields NA rather than an error.
-#' sesame 1.30.0 provides no karyotype or ethnicity inference.
+#' purity. Sex uses sesame's curated X/Y probe model; karyotype refines it with
+#' X-inactivation heterozygosity; age uses the Horvath353 clock via
+#' sesame::predictAge(); leukocyte fraction uses sesame's two-component model
+#' (EPIC/HM450, EPICv2 via the EPIC map); the SNP fingerprint barcodes the rs
+#' probes. All operate on the beta matrix already computed upstream, each
+#' wrapped so a failure yields NA rather than an error. All are informational
+#' and never gate Pass_QC.
 #'
 #' @param beta_values Beta matrix (probes x samples)
 #' @param array_type Array type ("450k","EPIC","EPICv2"); drives leukocyte platform
-#' @return data.frame(Sample_ID, Sesame_Sex, Horvath_Age, Leukocyte_Fraction)
+#' @return data.frame(Sample_ID, Sesame_Sex, Karyotype, X_Het, Horvath_Age,
+#'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count)
 compute_sample_inferences <- function(beta_values, array_type = NULL) {
   sample_ids <- colnames(beta_values)
   out <- data.frame(Sample_ID = sample_ids,
@@ -124,6 +193,18 @@ compute_sample_inferences <- function(beta_values, array_type = NULL) {
     tryCatch(as.character(sesame::inferSex(beta_values[, sid])),
              error = function(e) NA_character_)
   }, character(1))
+
+  # Karyotype — inferSex + X-inactivation heterozygosity (informational).
+  xlinked <- load_xlinked_probes(array_type)
+  kary <- lapply(seq_along(sample_ids), function(i)
+    infer_karyotype(beta_values[, sample_ids[i]], out$Sesame_Sex[i], xlinked))
+  out$Karyotype <- vapply(kary, function(z) z$karyotype, character(1))
+  out$X_Het     <- vapply(kary, function(z) z$x_het, numeric(1))
+
+  # rs-SNP genotype fingerprint (sample-swap / identity), informational.
+  fp <- lapply(sample_ids, function(sid) snp_fingerprint(beta_values[, sid]))
+  out$SNP_Fingerprint <- vapply(fp, function(z) z$fingerprint, character(1))
+  out$SNP_Count       <- vapply(fp, function(z) z$n_snp, integer(1))
 
   # Age — Horvath353 via the proper sesame::predictAge() on the vendored model.
   model <- load_horvath_model()
@@ -236,24 +317,34 @@ perform_qc <- function(rgset, beta_values, sample_info,
   # age. Informational only — surfaced for sample-swap / mislabelling checks,
   # they do NOT contribute to Pass_QC. Aligned to sample_qc by Sample_ID.
   # ---------------------------------------------------------------------------
-  message("Inferring sample sex, epigenetic age, and leukocyte fraction (sesame)...")
+  message("Inferring sample sex, karyotype, epigenetic age, leukocyte fraction, and SNP fingerprint (sesame)...")
   inferences <- tryCatch(
     compute_sample_inferences(beta_values, array_type = array_type),
     error = function(e) {
-      warning("Sample inference (sex/age/leukocyte) failed: ", conditionMessage(e))
+      warning("Sample inference (sex/karyotype/age/leukocyte/SNP) failed: ",
+              conditionMessage(e))
       NULL
     }
   )
   sample_qc$Sesame_Sex         <- NA_character_
+  sample_qc$Karyotype          <- NA_character_
+  sample_qc$X_Het              <- NA_real_
   sample_qc$Horvath_Age        <- NA_real_
   sample_qc$Leukocyte_Fraction <- NA_real_
+  sample_qc$SNP_Fingerprint    <- NA_character_
+  sample_qc$SNP_Count          <- NA_integer_
   if (!is.null(inferences)) {
-    sex_lookup   <- setNames(inferences$Sesame_Sex,         inferences$Sample_ID)
-    age_lookup   <- setNames(inferences$Horvath_Age,        inferences$Sample_ID)
-    leuko_lookup <- setNames(inferences$Leukocyte_Fraction, inferences$Sample_ID)
-    sample_qc$Sesame_Sex         <- as.character(sex_lookup[sample_qc$Sample_ID])
-    sample_qc$Horvath_Age        <- as.numeric(age_lookup[sample_qc$Sample_ID])
-    sample_qc$Leukocyte_Fraction <- as.numeric(leuko_lookup[sample_qc$Sample_ID])
+    lk <- function(col, cast) {
+      v <- setNames(inferences[[col]], inferences$Sample_ID)[sample_qc$Sample_ID]
+      cast(v)
+    }
+    sample_qc$Sesame_Sex         <- lk("Sesame_Sex",         as.character)
+    sample_qc$Karyotype          <- lk("Karyotype",          as.character)
+    sample_qc$X_Het              <- lk("X_Het",              as.numeric)
+    sample_qc$Horvath_Age        <- lk("Horvath_Age",        as.numeric)
+    sample_qc$Leukocyte_Fraction <- lk("Leukocyte_Fraction", as.numeric)
+    sample_qc$SNP_Fingerprint    <- lk("SNP_Fingerprint",    as.character)
+    sample_qc$SNP_Count          <- lk("SNP_Count",          as.integer)
   }
 
   # ---------------------------------------------------------------------------
@@ -392,7 +483,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
   key_cols  <- c("Sample_ID", "Pass_QC", "Failure_Reason", "Notes",
                  "Mean_Detection_P", "Failed_Probes_Count", "Failed_Probes_Percent",
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
-                 "GCT_Score", "Sesame_Sex", "Horvath_Age", "Leukocyte_Fraction",
+                 "GCT_Score", "Sesame_Sex", "Karyotype", "X_Het", "Horvath_Age",
+                 "Leukocyte_Fraction", "SNP_Fingerprint", "SNP_Count",
                  "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)

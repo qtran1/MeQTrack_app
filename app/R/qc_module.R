@@ -21,11 +21,15 @@ QC_COL_TOOLTIPS <- list(
   Pass_QC                 = "TRUE = sample passed both the mean-detection-p and failed-probe checks.",
   Flag_Mean_DetP          = "TRUE when the sample's mean detection-p exceeds the cohort threshold (default 0.05).",
   Flag_Failed_Probes      = "TRUE when the failed-probe percent reaches the threshold (default 25%).",
-  GCT_Score               = "Bisulfite-conversion control (GCT, Zhou et al. 2017). ~1.0 = complete conversion; higher = more incomplete. NA when not computed (e.g. EPICv2).",
+  GCT_Score               = "Bisulfite-conversion control (GCT, Zhou et al. 2017). ~1.0 = complete conversion; higher = more incomplete. Computed for 450k/EPIC/EPICv2.",
   Flag_GCT                = "TRUE when the GCT score exceeds the conversion threshold (default 1.3) — incomplete bisulfite conversion. Contributes to Pass_QC (fails the sample).",
   Sesame_Sex              = "Predicted sex from sesame's curated X/Y probe model (MALE/FEMALE). Informational — compare against expected sex and the minfi prediction to catch sample swaps.",
+  Karyotype               = "Coarse sex karyotype from the predicted sex plus X-inactivation heterozygosity (X_Het): XX or XY. A trailing '?' (e.g. XXY?, X0?) marks an UNCERTAIN aneuploidy guess to verify independently — not a definitive call. Informational, never gates Pass_QC.",
+  X_Het                   = "Fraction of X-linked probes with intermediate beta (0.3–0.7). Two active X chromosomes (X-inactivation) give ~0.45; a single X gives ~0.13. Drives the karyotype call.",
   Horvath_Age             = "Predicted epigenetic age (years) from the Horvath 353-CpG clock (Horvath 2013). Informational — a large gap from the known age can flag a mislabelled sample.",
   Leukocyte_Fraction      = "Estimated leukocyte (white-blood-cell) fraction from sesame's two-component model (0–1). Informational — gauges immune/normal-cell contamination in a tumour sample. EPICv2 is converted to EPIC space (Zhou Lab map) so it works across 450k/EPIC/EPICv2.",
+  SNP_Fingerprint         = "Genotype barcode from the Infinium rs SNP probes (A/H/B = AA/AB/BB per SNP; '.' = missing). Two samples from the same person share nearly all calls (~5% discordance) vs ~60% for different people — use it to catch sample swaps and confirm replicates. Replaces the (removed) sesame ethnicity inference.",
+  SNP_Count               = "Number of usable rs SNP probes in the fingerprint (typically ~59–65). Lower counts mean a less reliable identity match.",
   Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
   SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",
@@ -37,7 +41,7 @@ QC_CONVERSION_TOOLTIPS <- list(
   Sample_ID  = "Sentrix ID identifying this sample.",
   GCT_Score  = "Bisulfite-conversion control (GCT score, Zhou et al. 2017). A value near 1.0 means complete conversion; higher values indicate more residual incomplete conversion. Informational only — does not affect Pass_QC.",
   Array_Type = "Array platform detected for this sample.",
-  Note       = "Empty when GCT was computed. Otherwise explains why it was skipped (e.g. EPICv2 not yet supported)."
+  Note       = "Empty when GCT was computed. Otherwise explains why it was skipped (e.g. an array type whose extension probes aren't available)."
 )
 
 qc_module_ui <- function(id) {

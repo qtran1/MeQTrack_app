@@ -22,13 +22,15 @@ All come from the sesame beta/SigDF path. A small vendored `Anno/` directory
 (Zhou Lab annotation assets) backs the clock model and the EPICv2→EPIC map.
 Resist folding unrelated work into this scope.
 
-**Status — Phase 1 IMPLEMENTED, not yet released.** Work is on branch
-`preprocess-sesame-migration` (7 commits). Phase 1 (EPIC/450k GCT + all
-sample-integrity inferences, including EPICv2 leukocyte) is code-complete and
-verified end-to-end on the bundled EPIC example. Remaining: **Phase 2** =
-EPICv2 *GCT* coverage (the one EPICv2 gap left — GCT still records `NA` for v2);
-**Phase 3** = packaging/release. The P1-GATE regression check and a low-GCT
-fail-path UI check are still open (see Progress).
+**Status — Phase 1 RELEASED-READY (P1-GATE passed); Phase 2 IN PROGRESS.** Work
+is on branch `preprocess-sesame-migration`. Phase 1 (EPIC/450k GCT + all
+sample-integrity inferences, including EPICv2 leukocyte) is verified end-to-end
+and **P1-GATE passed** (live-app Conversion QC tab + pink fail-rows + banner
+confirmed; a fail-row highlighting bug under bslib Bootstrap 5 was fixed).
+**Phase 2** now covers more than the original EPICv2-GCT gap: at the user's
+request it also adds **sex karyotype** and a **SNP genotype fingerprint**
+(replacing the removed `inferEthnicity`). EPICv2 GCT is done and committed;
+karyotype + fingerprint are implemented. **Phase 3** = packaging/release.
 
 ---
 
@@ -209,17 +211,36 @@ stages `Anno/` into the release zip.
     (e.g. `max_gct_score = 1.11`) and confirm the red fail-row + reason + banner;
     (c) regression-confirm a pre-existing run's `Pass_QC` is unchanged.
 
-- **Phase 2 — EPICv2 coverage (NOT STARTED).**
-  - P2-T1. Source the EPICv2 (and ideally MSA) Infinium-I C/T-extension probe
-    IDs — from `sesameData` `EPICv2.probeInfo` if it carries `typeI.extC` /
-    `typeI.extT`, or derive them from the EPICv2 manifest.
-  - P2-T2. Pass `extR`/`extA` through `compute_gct_scores()` for EPICv2 so v2
-    samples get real scores instead of `NA`; collapse replicate probes
-    consistently with the beta path.
-  - P2-T3. Verify on the EPICv2 example IDATs already in
-    `pipeline/data/example/` (the `209*` prefixes).
-  - **P2-GATE.** EPICv2 run produces finite GCT scores; the Phase-2 note
-    disappears for v2.
+- **Phase 2 — EPICv2 GCT + karyotype + SNP fingerprint (IN PROGRESS).**
+  - P2-T1. **DONE.** Resolved the open question: `sesameData` 1.30.0 has **no**
+    `EPICv2.probeInfo`, so EPICv2 ext probes are derived from the Zhou Lab EPICv2
+    manifest. Rule (validated against sesame's curated EPIC set): type-I probes
+    with manifest `nextBase == "R"` are ext-C, `nextBase == "A"` are ext-T. The
+    `nextBase`-derived set reproduces sesame's *native* GCT exactly (0.00% diff)
+    on the EPIC example. Vendored the slim lists as
+    `Anno/EPICv2/EPICv2.typeI.ext.rds` (extC=47125, extT=16185).
+  - P2-T2. **DONE.** `compute_gct_scores()` loads the vendored ext probes via
+    `load_epicv2_ext_probes()` and passes `extR`/`extA` to
+    `bisConversionControl` for EPICv2; EPIC/450k keep the native auto-fetch path.
+    EPICv2 examples now score 1.19–1.92 (was `NA`). `build_release.sh`
+    sanity-checks the vendored file. (committed `7f071b5`)
+  - P2-T3. EPICv2 example run produces finite GCT in `conversion_qc.csv` and a
+    real `GCT_Score` in `sample_qc_report.csv` (no Phase-2 note).
+  - P2-T4. **Sex karyotype** (user-requested; `inferSexKaryotypes` is gone from
+    modern sesame). Reimplemented on the modern API in
+    `compute_sample_inferences()`: `Karyotype` (XX/XY, plus hedged `XXY?`/`X0?`)
+    from `inferSex` + X-inactivation heterozygosity `X_Het` (two-X ~0.45 vs
+    one-X ~0.13, clean on EPIC/450k). Deliberately avoids Y-channel intensity
+    (unreliable on degraded samples → spurious Turner flags). Informational,
+    never gates `Pass_QC`. Verified: EPIC → XX/XX/XY/XY, 450k → XY.
+  - P2-T5. **SNP genotype fingerprint** (replaces the removed `inferEthnicity`,
+    whose model was dropped from sesameData). `SNP_Fingerprint` + `SNP_Count`
+    from the ~59–65 Infinium `rs` probes (beta→0/1/2, NA→`.`, position-aligned by
+    probe ID for cross-sample comparability). Verified: same-individual pairs
+    ~5% discordance vs ~60–65% across individuals — clean sample-swap signal.
+  - **P2-GATE.** EPICv2 run produces finite GCT scores; karyotype + fingerprint
+    columns populate in `sample_qc_report.csv` across 450k/EPIC/EPICv2; the
+    Phase-2 GCT note disappears for v2.
 
 - **Phase 3 — Packaging & release (NOT STARTED).**
   - P3-T1. In-app Help tab + QUICKSTART: explain the GCT score and the
@@ -239,13 +260,27 @@ The GCT bisulfite-conversion score is the anchor capability of v2.3.0 (it gates
 `Pass_QC`); sesame sex, Horvath age, and leukocyte fraction ride along as
 informational sample-integrity columns. Phase 1 ships EPIC/450k GCT plus *all*
 sample-integrity inferences across array types (EPICv2 leukocyte works via the
-EPICv2→EPIC map). Phase 2 closes the last EPICv2 gap — *GCT* for EPICv2.
+EPICv2→EPIC map). Phase 2 closes the last EPICv2 gap — *GCT* for EPICv2 — and (added at the user's
+request) reintroduces **sex karyotype** and an **identity SNP fingerprint**, both
+reimplemented on the modern sesame API rather than via the removed functions.
+
+**Scope change (2026-06-19):** karyotype and "ethnicity" were originally
+out-of-scope on the belief they needed a sesame upgrade. Investigation showed
+`inferSexKaryotypes` and `inferEthnicity` were **removed** from modern sesame
+(old `sset` API; ethnicity model dropped from sesameData) — an upgrade would
+*not* restore them, and a downgrade would break the SigDF-based Phase 1. So
+instead: **karyotype** is reimplemented from `inferSex` + X-inactivation
+heterozygosity (P2-T4), and **ethnicity** is replaced by an `rs`-SNP genotype
+fingerprint for sample-swap/identity matching (P2-T5) — the sample-integrity
+signal actually wanted, without the deprecated low-reliability ethnicity model.
 
 **Explicitly out of scope:**
-- **Sex karyotype (`inferSexKaryotypes`) and ethnicity (`inferEthnicity`)** —
-  not present in the pinned sesame 1.30.0; they need a sesame/sesameData
-  upgrade. Deferred (see *Open questions*). We ship plain `inferSex`
-  (MALE/FEMALE) instead.
+- **Ethnicity classification proper** — the deprecated, removed sesame model is
+  not reproduced; we ship the identity SNP fingerprint instead.
+- **Aneuploidy as definitive calls** — karyotype asserts only XX/XY; XXY?/X0?
+  are hedged guesses (no aneuploid samples available to validate thresholds).
+- **Sex karyotype/ethnicity via sesame upgrade** — not viable (functions removed
+  upstream; upgrade churns `renv.lock` and risks minfi/basilisk interop).
 - Removing/repairing the inert `normalization` parameter and its stale
   user-facing strings — a separate cleanup, not this capability.
 - Any other sesame QC metric (e.g. `sesameQC_calcStats` intensity/detection
@@ -257,9 +292,12 @@ EPICv2→EPIC map). Phase 2 closes the last EPICv2 gap — *GCT* for EPICv2.
   **1.3** (a pragmatic middle ground — ~1.0 is ideal, and the bundled HM450
   example at 1.48 fails while the EPIC example at 1.11 passes). Open: validate
   this default against a real cohort / literature and adjust if warranted.
-- **EPICv2 ext probes:** does `sesameData`'s `EPICv2.probeInfo` actually expose
-  `typeI.extC` / `typeI.extT`? If not, Phase 2 must derive them from the
-  manifest — decide the source before starting P2-T1.
+- **EPICv2 ext probes:** RESOLVED — `sesameData` 1.30.0 has no
+  `EPICv2.probeInfo` at all; derived ext-C/ext-T from the Zhou Lab EPICv2
+  manifest (`nextBase` R/A), validated to reproduce native GCT exactly on EPIC.
+- **Karyotype thresholds:** `X_Het` cutoffs (two-X >0.32, one-X <0.25) are
+  calibrated on normal XX/XY examples only. Open: validate the aneuploidy
+  (XXY?/X0?) band against real Klinefelter/Turner samples if available.
 - **Report surfacing (P3-T2):** include the conversion table in the shareable
   HTML report, or keep it app-only? Leaning toward including it for parity with
   the main QC table.
