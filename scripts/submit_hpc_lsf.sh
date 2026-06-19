@@ -22,7 +22,7 @@
                                             # CPU-only; uncomment ONLY if the queue rejects
                                             # CPU-only jobs (don't hold a GPU you won't use).
 #BSUB -n 8                                  # cores for BiocParallel (keep == THREADS below)
-#BSUB -R "span[hosts=1] rusage[mem=12GB]"   # ~12GB/core x 8 = ~96GB; raise mem if preprocess OOMs
+#BSUB -R "span[hosts=1] rusage[mem=128GB]"  # 128GB RAM for 220-sample preprocess; raise if it OOMs
 #BSUB -W 2880                               # walltime: 48h in minutes (220 samples + CNV + report)
 #BSUB -o /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/meqtrack_melanoma_450k.%J.out
 #BSUB -e /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/meqtrack_melanoma_450k.%J.err
