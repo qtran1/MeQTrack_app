@@ -75,7 +75,12 @@ help_module_ui <- function(id) {
       shiny::tags$dt(class = "col-sm-3", "QC"),
       shiny::tags$dd(class = "col-sm-9",
         "Per-sample pass/fail, detection p, failed-probe %, intensity ",
-        "medians. Embedded interactive density and MDS plots."
+        "medians, and the sesame GCT bisulfite-conversion score (gates ",
+        "Pass_QC). Informational sample-integrity columns: predicted sex, ",
+        "karyotype (incl. a Loss-of-Y flag), Horvath epigenetic age, ",
+        "leukocyte fraction, and an rs-SNP identity match (SNP_Match_Pct). ",
+        "Sub-tabs: Sample identity heatmap, per-sample Dye-bias QQ plots, ",
+        "and embedded interactive density and MDS plots."
       ),
       shiny::tags$dt(class = "col-sm-3", "Dim. reduction"),
       shiny::tags$dd(class = "col-sm-9",
@@ -119,10 +124,13 @@ help_module_ui <- function(id) {
         shiny::tags$tr(
           shiny::tags$td(shiny::tags$strong("2. QC and probe filtering")),
           shiny::tags$td(
-            "Per-sample detection p, failed-probe %, intensity medians; ",
-            "flags samples that fall outside thresholds. Then removes ",
-            "sex-chromosome probes, SNP-affected probes, cross-reactive ",
-            "probes, and applies array-specific keep-lists."
+            "Per-sample detection p, failed-probe %, intensity medians, and ",
+            "the sesame GCT bisulfite-conversion score; flags samples that ",
+            "fall outside thresholds (GCT and detection failures gate ",
+            "Pass_QC). Also derives informational sample-integrity signals ",
+            "(sex/karyotype, age, leukocyte fraction, rs-SNP identity, ",
+            "dye-bias QQ). Then removes sex-chromosome probes, SNP-affected ",
+            "probes, cross-reactive probes, and applies array-specific keep-lists."
           )
         ),
         shiny::tags$tr(

@@ -20,7 +20,7 @@ click runs a six-stage pipeline:
 | Stage | What happens |
 |---|---|
 | **1. Preprocess** | Reads IDATs (auto-detects 450K / EPIC / EPICv2), applies SWAN normalization (or sesame's QCDB for EPICv2), produces β-values. |
-| **2. QC and probe filtering** | Per-sample detection-p, failed-probe %, intensity medians; flags samples outside thresholds. Then removes sex-chromosome probes, SNP-affected probes, cross-reactive probes, and applies array-specific keep-lists. |
+| **2. QC and probe filtering** | Per-sample detection-p, failed-probe %, intensity medians, and the sesame **GCT bisulfite-conversion** score (gates Pass_QC). Adds informational sample-integrity signals — predicted **sex/karyotype** (incl. Loss-of-Y flag), **Horvath age**, **leukocyte fraction**, **rs-SNP identity** match, and per-sample **dye-bias** QQ. Then removes sex-chromosome probes, SNP-affected probes, cross-reactive probes, and applies array-specific keep-lists. |
 | **3. Dimensionality reduction** | t-SNE, UMAP, and hierarchical clustering on the most variable probes (default 10,000). |
 | **4. Reference projection** | Projects each sample onto a pre-built reference t-SNE embedding of thousands of labelled methylomes (COMET paediatric solid-tumour, Capper et al. CNS-tumour / GSE90496, or Koelsche et al. sarcoma / GSE140686), then assigns each sample a nearest reference tumour class by k-NN vote — a diagnostic hint with a confidence score and ambiguity / distant-from-reference flags. |
 | **5. Copy-number variation** | Per-sample CNV via conumee2, genome-wide segment calls, frequency plot, and an in-app segment heatmap. |
@@ -42,9 +42,10 @@ The Shiny UI surfaces every stage interactively:
   to attach it: result tabs render its artifacts, per-step Run buttons
   start operating against that run, and the Settings card auto-populates
   from its saved parameters.
-- **QC tab** — sortable per-sample metrics table, embedded interactive
-  density and MDS plots; QC-fail samples are styled distinctly across
-  every downstream view.
+- **QC tab** — sortable per-sample metrics table (incl. GCT, sex/karyotype,
+  age, leukocyte, SNP identity), a pairwise SNP-identity concordance heatmap,
+  per-sample dye-bias QQ plots, and embedded interactive density and MDS
+  plots; QC-fail samples are styled distinctly across every downstream view.
 - **Dim. reduction tab** — interactive plotly t-SNE, UMAP, and
   dendrogram. Color points by any metadata column from your samplesheet
   (Sample_Group, Diagnosis, Batch, etc.). A **Reference projection**
