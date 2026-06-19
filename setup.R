@@ -31,6 +31,13 @@ if (.Platform$OS.type == "unix" && Sys.info()[["sysname"]] == "Darwin") {
   options(install.packages.compile.from.source = "never")
 }
 
+# Package type for the explicit install.packages() calls below. macOS pulls
+# arm64 binaries from PPM (above); Linux/HPC builds from SOURCE. PPM's generic
+# /cran/latest URL serves source on Linux, and forcing type = "binary" there
+# yields broken/half-installed packages (e.g. askpass with no Meta/package.rds).
+# HPC nodes have compilers, so source builds are the reliable path.
+.pkg_type <- if (Sys.info()[["sysname"]] == "Darwin") "binary" else "source"
+
 # Use all available cores for any compilation that does happen.
 options(Ncpus = parallel::detectCores(logical = FALSE))
 
@@ -152,7 +159,7 @@ message("Installing CRAN packages (may take a while on first run)...")
   PPM  = "https://packagemanager.posit.co/cran/latest",
   CRAN = "https://cran.r-project.org"
 )
-install.packages(cran_packages, type = "binary", repos = .cran_repos)
+install.packages(cran_packages, type = .pkg_type, repos = .cran_repos)
 
 # ---------------------------------------------------------------------------
 # 4. Bioconductor dependencies
@@ -254,7 +261,7 @@ if (!requireNamespace("conumee2", quietly = TRUE)) {
     # install in case the CRAN step skipped it for any reason. Same
     # PPM-then-CRAN fallback chain as the bulk install.
     if (!requireNamespace("remotes", quietly = TRUE)) {
-      install.packages("remotes", type = "binary", repos = .cran_repos)
+      install.packages("remotes", type = .pkg_type, repos = .cran_repos)
     }
     remotes::install_github("hovestadtlab/conumee2",
                             subdir = "conumee2",
@@ -351,7 +358,7 @@ if (length(missing_pkgs) > 0) {
 if (!nzchar(rmarkdown::find_pandoc()$dir)) {
   message("No system pandoc found; provisioning a managed copy for the HTML report...")
   if (!requireNamespace("pandoc", quietly = TRUE)) {
-    install.packages("pandoc", type = "binary", repos = .cran_repos)
+    install.packages("pandoc", type = .pkg_type, repos = .cran_repos)
   }
   pandoc_ok <- tryCatch({
     if (!pandoc::pandoc_available()) pandoc::pandoc_install()
