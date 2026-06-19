@@ -320,9 +320,10 @@ compute_gct_scores <- function(basenames, sample_ids, array_type, bpparam) {
 #'
 #' @param basenames IDAT basenames (sample_sheet$Basename)
 #' @param sample_ids Per-sample IDs (drive the file names + titles)
-#' @param output_dir Run output dir; PNGs land under figures/qc/dye_bias/
-plot_dye_bias_qq <- function(basenames, sample_ids, output_dir) {
-  fig_dir <- file.path(output_dir, "figures", "qc", "dye_bias")
+#' @param figures_qc_dir The run's figures/qc directory (dirs$figures_qc); PNGs
+#'   land in a dye_bias/ subfolder of it
+plot_dye_bias_qq <- function(basenames, sample_ids, figures_qc_dir) {
+  fig_dir <- file.path(figures_qc_dir, "dye_bias")
   dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
   message("Plotting dye-bias R/G QQ (", length(basenames), " samples)...")
   safe <- gsub("[^A-Za-z0-9._-]", "_", sample_ids)
@@ -490,14 +491,6 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
               "); skipping GCT table.")
       NULL
     }
-  )
-
-  # Dye-bias Red/Green QQ plots (sesame), one page per sample. tryCatch so a
-  # plotting failure can never break preprocessing.
-  tryCatch(
-    plot_dye_bias_qq(sample_sheet$Basename, sample_info$Sample_ID, output_dir),
-    error = function(e) warning("plot_dye_bias_qq() errored (",
-                                conditionMessage(e), "); skipping dye-bias QQ.")
   )
 
   message("Done Preprocessing!")

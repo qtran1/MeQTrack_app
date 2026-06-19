@@ -216,6 +216,17 @@ run_pipeline <- function(step) {
                 row.names = FALSE)
       log_message("Conversion QC (GCT) saved: conversion_qc.csv", log_file)
     }
+
+    # Dye-bias Red/Green QQ plots (sesame), one PNG per sample under
+    # figures/qc/dye_bias/. Driver-side so it lands in the run's figures dir
+    # (dirs$figures_qc), not the processed_data dir. tryCatch so a plotting
+    # failure can never break the run.
+    tryCatch(
+      plot_dye_bias_qq(sample_sheet$Basename, sample_info$Sample_ID,
+                       dirs$figures_qc),
+      error = function(e) log_message(
+        paste("Dye-bias QQ plotting skipped:", conditionMessage(e)), log_file)
+    )
   }
   else if (step != "reference_projection") {
     # Load preprocessed data if not running preprocessing.
