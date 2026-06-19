@@ -176,6 +176,44 @@ snp_fingerprint <- function(beta_sample) {
   list(fingerprint = paste(geno, collapse = ""), n_snp = sum(!is.na(rs)))
 }
 
+#' Genotype concordance (%) between two position-aligned fingerprint strings,
+#' over the SNPs both samples genotyped (ignoring "." positions). NA if fewer
+#' than min_snp SNPs are jointly usable.
+snp_concordance <- function(a, b, min_snp = 10) {
+  if (is.na(a) || is.na(b)) return(NA_real_)
+  ca <- strsplit(a, "")[[1]]; cb <- strsplit(b, "")[[1]]
+  if (length(ca) != length(cb)) return(NA_real_)   # different platform/probe set
+  ok <- ca != "." & cb != "."
+  if (sum(ok) < min_snp) return(NA_real_)
+  100 * mean(ca[ok] == cb[ok])
+}
+
+#' For each fingerprint, find its closest other sample in the batch by genotype
+#' concordance. Turns the raw barcode into two interpretable numbers: the
+#' best-matching Sample_ID and the % concordance. Same individual -> ~95-100%;
+#' unrelated -> ~35-50%. Returns a data.frame(SNP_BestMatch, SNP_Match_Pct).
+#' With <2 samples (nothing to compare against) both columns are NA.
+snp_best_matches <- function(fingerprints, sample_ids, min_snp = 10) {
+  n <- length(fingerprints)
+  best_id  <- rep(NA_character_, n)
+  best_pct <- rep(NA_real_, n)
+  if (n >= 2) {
+    for (i in seq_len(n)) {
+      pcts <- vapply(seq_len(n), function(j) {
+        if (j == i) return(NA_real_)
+        snp_concordance(fingerprints[i], fingerprints[j], min_snp)
+      }, numeric(1))
+      if (any(!is.na(pcts))) {
+        j <- which.max(pcts)
+        best_id[i]  <- sample_ids[j]
+        best_pct[i] <- round(pcts[j], 1)
+      }
+    }
+  }
+  data.frame(SNP_BestMatch = best_id, SNP_Match_Pct = best_pct,
+             stringsAsFactors = FALSE)
+}
+
 #' Per-sample sesame sample-integrity inferences (sex, karyotype, age,
 #' leukocyte fraction, SNP fingerprint)
 #'
@@ -194,7 +232,7 @@ snp_fingerprint <- function(beta_sample) {
 #'   log2 Y-minus-X median intensity (yMed - xMed) — enables the Loss-of-Y flag
 #'   in the karyotype. NA/absent entries simply skip the flag.
 #' @return data.frame(Sample_ID, Sesame_Sex, Karyotype, X_Het, Horvath_Age,
-#'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count)
+#'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count, SNP_BestMatch, SNP_Match_Pct)
 compute_sample_inferences <- function(beta_values, array_type = NULL,
                                       y_minus_x = NULL) {
   sample_ids <- colnames(beta_values)
@@ -222,9 +260,14 @@ compute_sample_inferences <- function(beta_values, array_type = NULL,
   out$X_Het     <- vapply(kary, function(z) z$x_het, numeric(1))
 
   # rs-SNP genotype fingerprint (sample-swap / identity), informational.
+  # The raw barcode is kept for cross-run archival; the per-sample best-match
+  # (closest other sample + % concordance) is the interpretable numeric summary.
   fp <- lapply(sample_ids, function(sid) snp_fingerprint(beta_values[, sid]))
   out$SNP_Fingerprint <- vapply(fp, function(z) z$fingerprint, character(1))
   out$SNP_Count       <- vapply(fp, function(z) z$n_snp, integer(1))
+  bm <- snp_best_matches(out$SNP_Fingerprint, sample_ids)
+  out$SNP_BestMatch  <- bm$SNP_BestMatch
+  out$SNP_Match_Pct  <- bm$SNP_Match_Pct
 
   # Age — Horvath353 via the proper sesame::predictAge() on the vendored model.
   model <- load_horvath_model()
@@ -360,6 +403,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
   sample_qc$X_Het              <- NA_real_
   sample_qc$Horvath_Age        <- NA_real_
   sample_qc$Leukocyte_Fraction <- NA_real_
+  sample_qc$SNP_BestMatch      <- NA_character_
+  sample_qc$SNP_Match_Pct      <- NA_real_
   sample_qc$SNP_Fingerprint    <- NA_character_
   sample_qc$SNP_Count          <- NA_integer_
   if (!is.null(inferences)) {
@@ -372,6 +417,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
     sample_qc$X_Het              <- lk("X_Het",              as.numeric)
     sample_qc$Horvath_Age        <- lk("Horvath_Age",        as.numeric)
     sample_qc$Leukocyte_Fraction <- lk("Leukocyte_Fraction", as.numeric)
+    sample_qc$SNP_BestMatch      <- lk("SNP_BestMatch",      as.character)
+    sample_qc$SNP_Match_Pct      <- lk("SNP_Match_Pct",      as.numeric)
     sample_qc$SNP_Fingerprint    <- lk("SNP_Fingerprint",    as.character)
     sample_qc$SNP_Count          <- lk("SNP_Count",          as.integer)
   }
@@ -513,7 +560,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
                  "Mean_Detection_P", "Failed_Probes_Count", "Failed_Probes_Percent",
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
                  "GCT_Score", "Sesame_Sex", "Karyotype", "X_Het", "Horvath_Age",
-                 "Leukocyte_Fraction", "SNP_Fingerprint", "SNP_Count",
+                 "Leukocyte_Fraction", "SNP_BestMatch", "SNP_Match_Pct",
+                 "SNP_Count", "SNP_Fingerprint",
                  "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)
