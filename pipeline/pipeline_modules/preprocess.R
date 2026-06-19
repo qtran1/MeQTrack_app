@@ -225,15 +225,38 @@ read_methylation_data <- function(sample_sheet, array_type = "auto") {
 #' @param bpparam BiocParallel backend (reused from the caller)
 #' @return data.frame with Sample_ID, GCT_Score, Array_Type, Note (one row/sample)
 compute_gct_scores <- function(basenames, sample_ids, array_type, bpparam) {
-  # Auto-fetch of C/T-extension probes only works for EPIC/HM450.
-  if (!toupper(array_type) %in% c("EPIC", "450K")) {
+  at <- toupper(array_type)
+
+  # bisConversionControl auto-fetches its C/T-extension probes for EPIC/HM450
+  # only. For EPICv2 (no sesameData EPICv2.probeInfo) we supply extR/extA from a
+  # vendored probe list derived from the Zhou Lab EPICv2 manifest (type-I probes
+  # split by extension base: nextBase "R" -> ext-C, "A" -> ext-T). This was
+  # validated to reproduce sesame's native GCT exactly on EPIC. Other platforms
+  # (MSA, HM27) stay NA until their ext probes are sourced.
+  gct_func <- sesame::bisConversionControl
+  if (at == "EPICV2") {
+    ext <- load_epicv2_ext_probes()
+    if (is.null(ext)) {
+      message("EPICv2 GCT ext-probe list unavailable — emitting NA.")
+      return(data.frame(
+        Sample_ID  = sample_ids,
+        GCT_Score  = NA_real_,
+        Array_Type = array_type,
+        Note       = "GCT skipped: EPICv2 ext-probe list not found under Anno/EPICv2/",
+        stringsAsFactors = FALSE
+      ))
+    }
+    gct_func <- function(sdf) {
+      sesame::bisConversionControl(sdf, extR = ext$extC, extA = ext$extT)
+    }
+  } else if (!at %in% c("EPIC", "450K")) {
     message("GCT bisulfite-conversion control not yet supported for array type '",
-            array_type, "' — emitting NA (Phase 2: EPICv2 ext probes).")
+            array_type, "' — emitting NA.")
     return(data.frame(
       Sample_ID  = sample_ids,
       GCT_Score  = NA_real_,
       Array_Type = array_type,
-      Note       = "GCT not yet supported for this array type (Phase 2: EPICv2 ext probes)",
+      Note       = "GCT not yet supported for this array type",
       stringsAsFactors = FALSE
     ))
   }
@@ -244,7 +267,7 @@ compute_gct_scores <- function(basenames, sample_ids, array_type, bpparam) {
   # Heavier prep (noob/dyebias) would distort the raw extension-probe signal.
   scores <- tryCatch(
     sesame::openSesame(basenames, prep = "C",
-                       func = sesame::bisConversionControl,
+                       func = gct_func,
                        BPPARAM = bpparam),
     error = function(e) {
       warning("GCT computation failed (", conditionMessage(e),

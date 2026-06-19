@@ -171,6 +171,7 @@ required=(
   "reference/tSNE_embedding_GSE305405_top10K.RData"
   "reference/COMET_Labkey_August_12_2025.csv"
   "Anno/HM450/Clock_Horvath353.rds"
+  "Anno/EPICv2/EPICv2.typeI.ext.rds"
   "reference/beta_GSE90496_top10K.rds"
   "reference/tSNE_embedding_GSE90496_top10K.RData"
   "reference/GSE90496_MC_MCF_color_labels_key.csv"

@@ -48,6 +48,24 @@ load_horvath_model <- function() {
 #' EPIC-only \code{estimateLeukocyte} for EPICv2 samples.
 #'
 #' @return Character vector of reliable EPIC probe IDs, or NULL if map missing.
+#' Load the vendored EPICv2 Infinium-I C/T-extension probe lists for GCT.
+#' Returns list(extC, extT) of EPICv2 probe IDs, or NULL if the file is absent.
+#' Derived from the Zhou Lab EPICv2 manifest (type-I, nextBase R->extC, A->extT);
+#' validated to reproduce sesame's native bisConversionControl on EPIC.
+load_epicv2_ext_probes <- function() {
+  path <- find_anno_file(file.path("EPICv2", "EPICv2.typeI.ext.rds"))
+  if (is.na(path)) {
+    warning("EPICv2 GCT ext-probe list not found under Anno/EPICv2/; ",
+            "EPICv2 GCT skipped.")
+    return(NULL)
+  }
+  ext <- tryCatch(readRDS(path), error = function(e) {
+    warning("Could not read EPICv2 ext-probe list: ", conditionMessage(e)); NULL
+  })
+  if (is.null(ext) || !all(c("extC", "extT") %in% names(ext))) return(NULL)
+  ext
+}
+
 load_epicv2_reliable_epic_probes <- function() {
   path <- find_anno_file(file.path("EPICv2", "EPICv2ToEPIC_map.tsv.gz"))
   if (is.na(path)) {
