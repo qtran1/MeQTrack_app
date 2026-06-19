@@ -11,7 +11,7 @@
 #
 # Set the cluster-side REPO_DIR and SAMPLESHEET paths (marked # <-- EDIT) below,
 # then submit. Project (melanoma), queue (rhel88_gpu), output (a timestamped
-# dir under .../qtran/Melanoma/meqtrack/), modules (R/4.4.0, pandoc/3.8.2),
+# dir under .../qtran/Melanoma/meqtrack/), modules (R/4.4.0, pandoc/3.8.3),
 # and resources are already set.
 # =============================================================================
 
@@ -39,7 +39,7 @@ THREADS=8                                   # keep equal to "#BSUB -n" above
 
 # Cluster modules: R (>= 4.4) for the pipeline, pandoc for the HTML report.
 module load R/4.4.0
-module load pandoc/3.8.2
+module load pandoc/3.8.3
 
 echo "Host:        $(hostname)"
 echo "R:           $(command -v Rscript) ($(Rscript -e 'cat(R.version.string)' 2>/dev/null))"
