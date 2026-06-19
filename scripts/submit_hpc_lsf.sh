@@ -35,6 +35,14 @@ SAMPLESHEET="/research/groups/orrgrp/projects/Melanoma/samplesheet_450k_hpc.csv"
 OUTPUT_DIR="/research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_$(date +%Y%m%d-%H%M%S)"  # timestamped run dir
 ARRAY_TYPE="450k"
 THREADS=8                                   # keep equal to "#BSUB -n" above
+
+# Pipeline steps to run, in order. Each runs as its own invocation; the pipeline
+# reloads prior results from disk between steps. Note: the "qc" step already runs
+# probe filtering, so there's no separate "filtering" entry. reference_projection
+# is OMITTED here (its reference beta-matrices are gitignored / large and not
+# melanoma-specific). To include it, insert reference_projection before cnv. To
+# run the whole pipeline in one process instead, set: STEPS=(all)
+STEPS=(preprocess qc dim_reduction cnv visualization)
 # -----------------------------------------------------------------------------
 
 # Cluster modules: R (>= 4.4) for the pipeline, pandoc for the HTML report.
@@ -59,12 +67,17 @@ cd "$REPO_DIR"
 # uncommented (installed packages are skipped); comment out once provisioned.
 # Rscript setup.R
 
-Rscript pipeline/methylation_pipeline.R \
-  --input     "$SAMPLESHEET" \
-  --output    "$OUTPUT_DIR" \
-  --data_dir  "$REPO_DIR/pipeline/data" \
-  --array_type "$ARRAY_TYPE" \
-  --threads   "$THREADS" \
-  --step      all
+for step in "${STEPS[@]}"; do
+  echo "===== $(date '+%F %T')  step: ${step} ====="
+  Rscript pipeline/methylation_pipeline.R \
+    --input     "$SAMPLESHEET" \
+    --output    "$OUTPUT_DIR" \
+    --data_dir  "$REPO_DIR/pipeline/data" \
+    --array_type "$ARRAY_TYPE" \
+    --threads   "$THREADS" \
+    --step      "$step"
+done
+
+echo "===== $(date '+%F %T')  pipeline finished -> $OUTPUT_DIR ====="
 
 echo "Pipeline finished. Results in: $OUTPUT_DIR"
