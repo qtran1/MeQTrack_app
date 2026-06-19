@@ -21,7 +21,7 @@
 ##BSUB -gpu "num=1/host"                    # rhel88_gpu is a GPU queue but this pipeline is
                                             # CPU-only; uncomment ONLY if the queue rejects
                                             # CPU-only jobs (don't hold a GPU you won't use).
-#BSUB -n 8                                  # cores for BiocParallel (keep == THREADS below)
+#BSUB -n 2                                  # few cores, big memory (keep == THREADS below)
 #BSUB -R "span[hosts=1] rusage[mem=128GB]"  # 128GB RAM for 220-sample preprocess; raise if it OOMs
 #BSUB -W 2880                               # walltime: 48h in minutes (220 samples + CNV + report)
 #BSUB -o /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/meqtrack_melanoma_450k.%J.out
@@ -34,7 +34,7 @@ REPO_DIR="/research/groups/orrgrp/projects/MeQTrack_app"                       #
 SAMPLESHEET="/research/groups/orrgrp/projects/Melanoma/samplesheet_450k_hpc.csv" # <-- EDIT: cluster path of the 220-sample sheet
 OUTPUT_DIR="/research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_$(date +%Y%m%d-%H%M%S)"  # timestamped run dir
 ARRAY_TYPE="450k"
-THREADS=8                                   # keep equal to "#BSUB -n" above
+THREADS=2                                   # keep equal to "#BSUB -n" above
 
 # Pipeline steps to run, in order. Each runs as its own invocation; the pipeline
 # reloads prior results from disk between steps. Note: the "qc" step already runs
