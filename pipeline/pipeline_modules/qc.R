@@ -214,6 +214,23 @@ snp_best_matches <- function(fingerprints, sample_ids, min_snp = 10) {
              stringsAsFactors = FALSE)
 }
 
+#' Full pairwise genotype-concordance matrix (%) across the batch, for the
+#' identity heatmap. Symmetric, diagonal = 100 (self), NA where two samples
+#' share too few usable SNPs. Rows/cols named by Sample_ID.
+snp_concordance_matrix <- function(fingerprints, sample_ids, min_snp = 10) {
+  n <- length(sample_ids)
+  m <- matrix(NA_real_, n, n, dimnames = list(sample_ids, sample_ids))
+  for (i in seq_len(n)) {
+    m[i, i] <- if (!is.na(fingerprints[i])) 100 else NA_real_
+    if (i < n) for (j in (i + 1):n) {
+      v <- snp_concordance(fingerprints[i], fingerprints[j], min_snp)
+      m[i, j] <- v
+      m[j, i] <- v
+    }
+  }
+  round(m, 1)
+}
+
 #' Per-sample sesame sample-integrity inferences (sex, karyotype, age,
 #' leukocyte fraction, SNP fingerprint)
 #'
@@ -232,7 +249,9 @@ snp_best_matches <- function(fingerprints, sample_ids, min_snp = 10) {
 #'   log2 Y-minus-X median intensity (yMed - xMed) — enables the Loss-of-Y flag
 #'   in the karyotype. NA/absent entries simply skip the flag.
 #' @return data.frame(Sample_ID, Sesame_Sex, Karyotype, X_Het, Horvath_Age,
-#'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count, SNP_BestMatch, SNP_Match_Pct)
+#'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count, SNP_BestMatch, SNP_Match_Pct).
+#'   SNP_Fingerprint is computed for the concordance matrix but not surfaced in
+#'   the report.
 compute_sample_inferences <- function(beta_values, array_type = NULL,
                                       y_minus_x = NULL) {
   sample_ids <- colnames(beta_values)
@@ -405,7 +424,6 @@ perform_qc <- function(rgset, beta_values, sample_info,
   sample_qc$Leukocyte_Fraction <- NA_real_
   sample_qc$SNP_BestMatch      <- NA_character_
   sample_qc$SNP_Match_Pct      <- NA_real_
-  sample_qc$SNP_Fingerprint    <- NA_character_
   sample_qc$SNP_Count          <- NA_integer_
   if (!is.null(inferences)) {
     lk <- function(col, cast) {
@@ -419,8 +437,14 @@ perform_qc <- function(rgset, beta_values, sample_info,
     sample_qc$Leukocyte_Fraction <- lk("Leukocyte_Fraction", as.numeric)
     sample_qc$SNP_BestMatch      <- lk("SNP_BestMatch",      as.character)
     sample_qc$SNP_Match_Pct      <- lk("SNP_Match_Pct",      as.numeric)
-    sample_qc$SNP_Fingerprint    <- lk("SNP_Fingerprint",    as.character)
     sample_qc$SNP_Count          <- lk("SNP_Count",          as.integer)
+    # The raw per-sample fingerprint is no longer surfaced in the report — the
+    # pairwise concordance matrix below + SNP_BestMatch/Match_Pct replace it.
+    # Write the full matrix for the in-app identity heatmap (>= 2 samples).
+    if (nrow(inferences) >= 2 && "SNP_Fingerprint" %in% names(inferences)) {
+      cm <- snp_concordance_matrix(inferences$SNP_Fingerprint, inferences$Sample_ID)
+      utils::write.csv(cm, file.path(output_dir, "snp_concordance.csv"))
+    }
   }
 
   # ---------------------------------------------------------------------------
@@ -561,7 +585,7 @@ perform_qc <- function(rgset, beta_values, sample_info,
                  "Median_Meth_Intensity", "Median_Unmeth_Intensity",
                  "GCT_Score", "Sesame_Sex", "Karyotype", "X_Het", "Horvath_Age",
                  "Leukocyte_Fraction", "SNP_BestMatch", "SNP_Match_Pct",
-                 "SNP_Count", "SNP_Fingerprint",
+                 "SNP_Count",
                  "Flag_Mean_DetP", "Flag_Failed_Probes", "Flag_GCT", "Note_Low_Intensity",
                  "SWAN_Median_Meth", "SWAN_Median_Unmeth", "SWAN_Recoverable")
   extra_cols <- setdiff(names(sample_qc), key_cols)

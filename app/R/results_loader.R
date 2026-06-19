@@ -26,6 +26,7 @@
 RESULTS_PATHS <- list(
   qc_report       = file.path("qc", "sample_qc_report.csv"),
   conversion_qc   = file.path("qc", "conversion_qc.csv"),
+  snp_concordance = file.path("qc", "snp_concordance.csv"),
   qc_rdata        = file.path("qc", "qc_results.RData"),
   sample_info     = file.path("processed_data", "sample_info.txt"),
   tsne_rdata      = file.path("dimensionality_reduction", "tsne_results.RData"),
@@ -74,6 +75,17 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
     )
   } else NULL
 
+  # Pairwise SNP genotype-concordance matrix (sample-identity heatmap). First
+  # column holds the Sample_IDs (row names); keep names verbatim.
+  snp_concordance_path <- file.path(run_dir, RESULTS_PATHS$snp_concordance)
+  snp_concordance <- if (file.exists(snp_concordance_path)) {
+    tryCatch(
+      as.matrix(utils::read.csv(snp_concordance_path, row.names = 1,
+                                check.names = FALSE)),
+      error = function(e) NULL
+    )
+  } else NULL
+
   sample_info_path <- file.path(run_dir, RESULTS_PATHS$sample_info)
   sample_info <- if (file.exists(sample_info_path)) {
     tryCatch(
@@ -105,6 +117,7 @@ load_results_bundle <- function(run_dir, run_url_base = NULL) {
     run_dir       = run_dir,
     qc_report     = qc_report,
     conversion_qc = conversion_qc,
+    snp_concordance = snp_concordance,
     qc_fail_ids   = qc_fail_ids,
     sample_info   = sample_info,
     tsne          = tsne,

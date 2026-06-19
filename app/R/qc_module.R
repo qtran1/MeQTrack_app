@@ -29,21 +29,12 @@ QC_COL_TOOLTIPS <- list(
   Horvath_Age             = "Predicted epigenetic age (years) from the Horvath 353-CpG clock (Horvath 2013). Informational — a large gap from the known age can flag a mislabelled sample.",
   Leukocyte_Fraction      = "Estimated leukocyte (white-blood-cell) fraction from sesame's two-component model (0–1). Informational — gauges immune/normal-cell contamination in a tumour sample. EPICv2 is converted to EPIC space (Zhou Lab map) so it works across 450k/EPIC/EPICv2.",
   SNP_BestMatch           = "The other sample in this run with the most similar SNP genotype fingerprint — i.e. the closest genetic match. Pair this with SNP_Match_Pct.",
-  SNP_Match_Pct           = "Genotype concordance (%) with SNP_BestMatch. ~95–100% = same individual (a true replicate / tumour-normal pair, OR a sample swap if they shouldn't match); ~35–50% = unrelated. The numeric, at-a-glance version of the fingerprint comparison.",
-  SNP_Fingerprint         = "Raw genotype barcode from the Infinium rs SNP probes (A/H/B = AA/AB/BB per SNP; '.' = missing). Kept for cross-run comparison; for within-run checks read SNP_BestMatch / SNP_Match_Pct instead. Replaces the (removed) sesame ethnicity inference.",
-  SNP_Count               = "Number of usable rs SNP probes in the fingerprint (typically ~59–65). Lower counts mean a less reliable identity match.",
+  SNP_Match_Pct           = "Genotype concordance (%) with SNP_BestMatch. ~95–100% = same individual (a true replicate / tumour-normal pair, OR a sample swap if they shouldn't match); ~35–50% = unrelated. See the Sample identity tab for the full pairwise heatmap.",
+  SNP_Count               = "Number of usable rs SNP probes behind the identity match (typically ~59–65). Lower counts mean a less reliable match.",
   Note_Low_Intensity      = "Informational only — does NOT contribute to Pass_QC. Flags samples with low median intensities, often a scanner-gain issue that SWAN normalization can recover.",
   SWAN_Median_Meth        = "Median methylated intensity AFTER SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Median_Unmeth      = "Median unmethylated intensity after SWAN normalization. Computed only for low-intensity samples.",
   SWAN_Recoverable        = "TRUE when SWAN normalization brings intensities above threshold — the low-intensity flag was a scanner-gain artifact, not a true failure."
-)
-
-# Tooltips for the standalone bisulfite-conversion (GCT) QC table.
-QC_CONVERSION_TOOLTIPS <- list(
-  Sample_ID  = "Sentrix ID identifying this sample.",
-  GCT_Score  = "Bisulfite-conversion control (GCT score, Zhou et al. 2017). A value near 1.0 means complete conversion; higher values indicate more residual incomplete conversion. Informational only — does not affect Pass_QC.",
-  Array_Type = "Array platform detected for this sample.",
-  Note       = "Empty when GCT was computed. Otherwise explains why it was skipped (e.g. an array type whose extension probes aren't available)."
 )
 
 qc_module_ui <- function(id) {
@@ -58,9 +49,15 @@ qc_module_ui <- function(id) {
       )
     ),
     bslib::nav_panel(
-      "Conversion QC",
+      "Sample identity",
+      shiny::p(
+        class = "text-muted",
+        "Pairwise SNP genotype concordance (%). ~95–100% = same individual ",
+        "(replicate / tumour-normal pair, or an unexpected swap); ~35–50% = ",
+        "unrelated. Computed from the Infinium rs probes."
+      ),
       shinycssloaders::withSpinner(
-        DT::DTOutput(ns("conversion_table")),
+        plotly::plotlyOutput(ns("snp_heatmap"), height = "auto"),
         type = 7, color = COLORS$primary
       )
     ),
@@ -149,29 +146,30 @@ qc_module_server <- function(id, results) {
       dt
     })
 
-    output$conversion_table <- DT::renderDT({
+    output$snp_heatmap <- plotly::renderPlotly({
       r <- results()
-      if (is.null(r) || is.null(r$conversion_qc)) return(NULL)
-      df <- r$conversion_qc
-      numeric_cols <- which(vapply(df, is.numeric, logical(1)))
-      DT::datatable(
-        df,
-        rownames = FALSE,
-        selection = "none",
-        class = "stripe hover compact",
-        width = "100%",
-        options = list(
-          pageLength = 25,
-          scrollX = TRUE,
-          autoWidth = FALSE,
-          dom = "ltip",
-          headerCallback = dt_header_tooltips(QC_CONVERSION_TOOLTIPS),
-          columnDefs = if (length(numeric_cols)) list(list(
-            className = "dt-right",
-            targets = as.integer(numeric_cols - 1L)
-          )) else list()
+      m <- if (!is.null(r)) r$snp_concordance else NULL
+      if (is.null(m) || nrow(m) < 2) {
+        return(plotly::plotly_empty(type = "scatter", mode = "markers") |>
+          plotly::layout(title = list(
+            text = "Sample-identity heatmap needs at least 2 samples with SNP data.",
+            font = list(size = 13))))
+      }
+      ids <- rownames(m)
+      # Plotly draws the y-axis bottom-up; reverse rows so the diagonal reads
+      # top-left to bottom-right like the column order.
+      plotly::plot_ly(
+        x = ids, y = rev(ids), z = m[rev(seq_len(nrow(m))), , drop = FALSE],
+        type = "heatmap", zmin = 0, zmax = 100,
+        colors = grDevices::colorRampPalette(c("#f7fbff", COLORS$primary))(64),
+        hovertemplate = "%{y}<br>vs %{x}<br>concordance: %{z}%<extra></extra>",
+        colorbar = list(title = "% match")
+      ) |>
+        plotly::layout(
+          xaxis = list(tickangle = -45, title = ""),
+          yaxis = list(title = ""),
+          margin = list(l = 140, b = 140)
         )
-      )
     })
 
     output$density_frame <- shiny::renderUI({
