@@ -128,10 +128,15 @@ qc_module_server <- function(id, results) {
         )
       )
       if ("Pass_QC" %in% colnames(df)) {
+        # Shade failed-sample rows pink. Under bslib's Bootstrap 5 theme DT
+        # paints a per-cell background (--bs-table-bg, plus the stripe
+        # box-shadow), which hides a row-level (<tr>) background. So style every
+        # cell keyed off Pass_QC (target = "cell" across all columns) rather than
+        # using target = "row", which renders invisible under BS5.
         dt <- DT::formatStyle(
-          dt, "Pass_QC", target = "row",
+          dt, columns = colnames(df), valueColumns = "Pass_QC", target = "cell",
           backgroundColor = DT::styleEqual(
-            c("TRUE", "FALSE"), c("#ffffff", "#fde2e4")
+            c("TRUE", "FALSE"), c(NA, "#fde2e4")
           )
         )
       }
