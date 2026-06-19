@@ -416,9 +416,14 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   gset <- mapToGenome(mset_raw)
   pred_sex <- getSex(gset)
 
-  # Extract predicted sex values from S4 object
+  # Extract predicted sex values from S4 object. Also keep the X/Y median
+  # intensities (xMed/yMed, log2) — they drive minfi's call and, retained here,
+  # let the karyotype step flag Loss-of-Y (single X by methylation but depleted
+  # Y intensity, common in tumours) instead of discarding them.
   if (is(pred_sex, "DataFrame") || is(pred_sex, "data.frame")) {
-    sample_info$pred_sex <- as.character(pred_sex$predictedSex)
+    sample_info$pred_sex   <- as.character(pred_sex$predictedSex)
+    sample_info$Minfi_xMed <- as.numeric(pred_sex$xMed)
+    sample_info$Minfi_yMed <- as.numeric(pred_sex$yMed)
   } else {
     sample_info$pred_sex <- as.character(pred_sex)
   }

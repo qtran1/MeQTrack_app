@@ -122,10 +122,20 @@ load_xlinked_probes <- function(array_type) {
 #' (X_het) cleanly separates two-X (~0.48) from one-X (~0.13) across EPIC/450k.
 #' Combined with the MALE/FEMALE call this yields XX / XY and flags the two
 #' realistically detectable aneuploidies as uncertain guesses (XXY? = male +
-#' two-X; X0? = female + one-X). We deliberately avoid Y-channel intensity,
-#' which is unreliable on degraded samples and would spuriously flag Turner.
+#' two-X; X0? = female + one-X).
+#'
+#' X-dosage (the call backbone) deliberately uses methylation, not Y-channel
+#' intensity, which is noisy on degraded samples. Y intensity is used only for a
+#' separate Loss-of-Y flag: when the sample looks male by methylation (one X)
+#' but minfi's Y/X intensity gap (\code{y_minus_x}, log2 yMed-xMed) drops below
+#' \code{loy_cutoff} (the same -2 minfi uses to call female), the Y is depleted
+#' — common somatic LOY in tumours, and exactly the case where sesame says MALE
+#' while minfi says FEMALE. Flagged as "XY (low Y - possible LOY)". When
+#' y_minus_x is NA the flag simply never fires.
+#'
 #' Returns NA when sex is unknown or too few X-linked probes survive.
-infer_karyotype <- function(beta_sample, sex, xlinked) {
+infer_karyotype <- function(beta_sample, sex, xlinked,
+                            y_minus_x = NA_real_, loy_cutoff = -2) {
   if (is.null(xlinked) || is.na(sex))
     return(list(karyotype = NA_character_, x_het = NA_real_))
   bx <- beta_sample[base_probe_id(names(beta_sample)) %in% xlinked]
@@ -134,7 +144,9 @@ infer_karyotype <- function(beta_sample, sex, xlinked) {
   x_het <- mean(bx > 0.3 & bx < 0.7)
   two_x <- x_het > 0.32
   one_x <- x_het < 0.25
+  y_lost <- !is.na(y_minus_x) && y_minus_x < loy_cutoff
   kary <- if (sex == "FEMALE" && two_x) "XX"
+          else if (sex == "MALE" && one_x && y_lost) "XY (low Y - possible LOY)"
           else if (sex == "MALE"   && one_x) "XY"
           else if (sex == "MALE"   && two_x) "XXY? (uncertain - verify)"
           else if (sex == "FEMALE" && one_x) "X0? (uncertain - verify)"
@@ -178,9 +190,13 @@ snp_fingerprint <- function(beta_sample) {
 #'
 #' @param beta_values Beta matrix (probes x samples)
 #' @param array_type Array type ("450k","EPIC","EPICv2"); drives leukocyte platform
+#' @param y_minus_x Optional named numeric vector (by Sample_ID) of minfi's
+#'   log2 Y-minus-X median intensity (yMed - xMed) — enables the Loss-of-Y flag
+#'   in the karyotype. NA/absent entries simply skip the flag.
 #' @return data.frame(Sample_ID, Sesame_Sex, Karyotype, X_Het, Horvath_Age,
 #'   Leukocyte_Fraction, SNP_Fingerprint, SNP_Count)
-compute_sample_inferences <- function(beta_values, array_type = NULL) {
+compute_sample_inferences <- function(beta_values, array_type = NULL,
+                                      y_minus_x = NULL) {
   sample_ids <- colnames(beta_values)
   out <- data.frame(Sample_ID = sample_ids,
                     Sesame_Sex = NA_character_,
@@ -195,9 +211,13 @@ compute_sample_inferences <- function(beta_values, array_type = NULL) {
   }, character(1))
 
   # Karyotype — inferSex + X-inactivation heterozygosity (informational).
+  # y_minus_x (minfi yMed-xMed) adds the Loss-of-Y flag when available.
   xlinked <- load_xlinked_probes(array_type)
+  yx <- function(sid) if (!is.null(y_minus_x) && sid %in% names(y_minus_x))
+    as.numeric(y_minus_x[[sid]]) else NA_real_
   kary <- lapply(seq_along(sample_ids), function(i)
-    infer_karyotype(beta_values[, sample_ids[i]], out$Sesame_Sex[i], xlinked))
+    infer_karyotype(beta_values[, sample_ids[i]], out$Sesame_Sex[i], xlinked,
+                    y_minus_x = yx(sample_ids[i])))
   out$Karyotype <- vapply(kary, function(z) z$karyotype, character(1))
   out$X_Het     <- vapply(kary, function(z) z$x_het, numeric(1))
 
@@ -318,8 +338,17 @@ perform_qc <- function(rgset, beta_values, sample_info,
   # they do NOT contribute to Pass_QC. Aligned to sample_qc by Sample_ID.
   # ---------------------------------------------------------------------------
   message("Inferring sample sex, karyotype, epigenetic age, leukocyte fraction, and SNP fingerprint (sesame)...")
+  # Minfi yMed-xMed per sample (from preprocess), keyed by Sample_ID, for the
+  # karyotype Loss-of-Y flag. Absent on older preprocessed data -> NULL -> no flag.
+  y_minus_x <- NULL
+  if (!is.null(sample_info) &&
+      all(c("Sample_ID", "Minfi_xMed", "Minfi_yMed") %in% names(sample_info))) {
+    y_minus_x <- setNames(sample_info$Minfi_yMed - sample_info$Minfi_xMed,
+                          as.character(sample_info$Sample_ID))
+  }
   inferences <- tryCatch(
-    compute_sample_inferences(beta_values, array_type = array_type),
+    compute_sample_inferences(beta_values, array_type = array_type,
+                              y_minus_x = y_minus_x),
     error = function(e) {
       warning("Sample inference (sex/karyotype/age/leukocyte/SNP) failed: ",
               conditionMessage(e))
