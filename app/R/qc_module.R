@@ -62,6 +62,17 @@ qc_module_ui <- function(id) {
       )
     ),
     bslib::nav_panel(
+      "Dye bias",
+      shiny::p(
+        class = "text-muted",
+        "Per-sample Red–Green QQ plot (sesame). Points on the diagonal mean ",
+        "the two colour channels are balanced; a strong departure indicates ",
+        "dye bias (the pipeline corrects it downstream via noob/dyeBiasNL)."
+      ),
+      shiny::uiOutput(ns("dye_bias_selector")),
+      shiny::uiOutput(ns("dye_bias_frame"))
+    ),
+    bslib::nav_panel(
       "Density plot",
       shiny::uiOutput(ns("density_frame"))
     ),
@@ -170,6 +181,39 @@ qc_module_server <- function(id, results) {
           yaxis = list(title = ""),
           margin = list(l = 140, b = 140)
         )
+    })
+
+    output$dye_bias_selector <- shiny::renderUI({
+      r <- results()
+      ids <- if (!is.null(r)) {
+        d <- file.path(r$run_dir, "figures", "qc", "dye_bias")
+        if (dir.exists(d)) sub("\\.png$", "", list.files(d, pattern = "\\.png$"))
+        else character(0)
+      } else character(0)
+      if (!length(ids)) {
+        return(shiny::tags$em(class = "text-muted",
+                              "No dye-bias plots yet (run preprocessing)."))
+      }
+      shiny::selectInput(ns("dye_sample"), label = NULL,
+                         choices = ids, selected = ids[1])
+    })
+
+    output$dye_bias_frame <- shiny::renderUI({
+      r <- results()
+      sid <- input$dye_sample
+      if (is.null(r) || is.null(sid)) {
+        return(shiny::div(class = "alert alert-secondary",
+                          "Select a sample to view its dye-bias QQ plot."))
+      }
+      rel <- file.path("figures", "qc", "dye_bias", paste0(sid, ".png"))
+      if (!file.exists(file.path(r$run_dir, rel))) {
+        return(shiny::div(class = "alert alert-warning",
+                          sprintf("Dye-bias plot not found for %s.", sid)))
+      }
+      shiny::img(
+        src = paste0(r$run_url_base, "/", rel),
+        style = "max-width: 700px; width: 100%; border: 1px solid #dee2e6; border-radius: 4px;"
+      )
     })
 
     output$density_frame <- shiny::renderUI({

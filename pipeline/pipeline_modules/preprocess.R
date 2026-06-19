@@ -304,6 +304,51 @@ compute_gct_scores <- function(basenames, sample_ids, array_type, bpparam) {
   )
 }
 
+#' Dye-bias Red/Green QQ plots (sesame) — one PNG per sample.
+#'
+#' sesame::sesameQC_plotRedGrnQQ draws a Red-vs-Green quantile-quantile plot
+#' that exposes dye bias: a strong departure from the diagonal means the two
+#' colour channels are imbalanced. Computed on the channel-inferred SigDF
+#' (prep = "C") — i.e. BEFORE the pipeline's dye-bias correction — so the plot
+#' shows the bias that downstream noob/dyeBiasNL then corrects.
+#'
+#' Writes one rasterized PNG per sample to figures/qc/dye_bias/<Sample_ID>.png
+#' (~40 KB each) rather than a single vector PDF: the QQ plots every address, so
+#' a vector page is ~1 MB and a 200-sample PDF would be hundreds of MB. The app
+#' shows them one at a time behind a sample selector. Each sample is wrapped so
+#' one unreadable IDAT can't abort the rest.
+#'
+#' @param basenames IDAT basenames (sample_sheet$Basename)
+#' @param sample_ids Per-sample IDs (drive the file names + titles)
+#' @param output_dir Run output dir; PNGs land under figures/qc/dye_bias/
+plot_dye_bias_qq <- function(basenames, sample_ids, output_dir) {
+  fig_dir <- file.path(output_dir, "figures", "qc", "dye_bias")
+  dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+  message("Plotting dye-bias R/G QQ (", length(basenames), " samples)...")
+  safe <- gsub("[^A-Za-z0-9._-]", "_", sample_ids)
+  n_ok <- 0L
+  for (i in seq_along(basenames)) {
+    png_path <- file.path(fig_dir, paste0(safe[i], ".png"))
+    ok <- tryCatch({
+      sdf <- sesame::inferInfiniumIChannel(sesame::readIDATpair(basenames[i]))
+      grDevices::png(png_path, width = 700, height = 700, res = 110)
+      tryCatch(
+        sesame::sesameQC_plotRedGrnQQ(sdf, main = paste0("R-G QQ: ", sample_ids[i])),
+        finally = grDevices::dev.off()
+      )
+      TRUE
+    }, error = function(e) {
+      warning("Dye-bias QQ failed for ", sample_ids[i], ": ", conditionMessage(e))
+      if (file.exists(png_path)) unlink(png_path)
+      FALSE
+    })
+    if (isTRUE(ok)) n_ok <- n_ok + 1L
+  }
+  message("Dye-bias QQ written for ", n_ok, "/", length(basenames),
+          " samples: figures/qc/dye_bias/")
+  invisible(fig_dir)
+}
+
 #' Preprocess methylation data
 #'
 #' @param sample_sheet Sample sheet data frame
@@ -445,6 +490,14 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
               "); skipping GCT table.")
       NULL
     }
+  )
+
+  # Dye-bias Red/Green QQ plots (sesame), one page per sample. tryCatch so a
+  # plotting failure can never break preprocessing.
+  tryCatch(
+    plot_dye_bias_qq(sample_sheet$Basename, sample_info$Sample_ID, output_dir),
+    error = function(e) warning("plot_dye_bias_qq() errored (",
+                                conditionMessage(e), "); skipping dye-bias QQ.")
   )
 
   message("Done Preprocessing!")
