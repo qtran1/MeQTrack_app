@@ -250,7 +250,52 @@ stages `Anno/` into the release zip.
   - P3-T3. Bump `MEQTRACK_VERSION` to `2.3.0`; build and smoke-test the release
     zip; merge `preprocess-sesame-migration` → `main`.
   - **P3-GATE.** Fresh-install smoke test passes with the Conversion QC tab
-    working.
+    working. **DONE 2026-06-19** — v2.3.0 fast-forward merged to `main`
+    (`df92f70`); `--step all` smoke-tested end-to-end on the EPIC example.
+    (Note: the "Conversion QC" tab was instead removed — `GCT_Score` lives in the
+    main Sample-metrics table — and a "Sample identity" SNP-concordance heatmap +
+    per-sample "Dye bias" QQ tab were added.)
+
+- **Phase 4 — Cell-type deconvolution (deconvMe) — PLANNED (v2.4.0, post-v2.3.0).**
+  Add reference-based immune cell-type deconvolution alongside sesame's single
+  leukocyte-fraction scalar, via the omnideconv **deconvMe** package
+  (https://github.com/omnideconv/deconvMe), which wraps 5 methods directly
+  applicable to Illumina array data: **EpiDISH, Houseman, MethAtlas, methylCC,
+  methylResolver**.
+  - **Why / how it relates to sesame leukocyte:** sesame `Leukocyte_Fraction`
+    answers *how much* immune content (one scalar, 2-component purity model);
+    deconvMe answers *which* cell types and in what proportion (a composition
+    vector — CD4T/CD8T/NK/B/Mono/Neutrophil/…). Complementary, not redundant.
+    They cross-validate: across samples the summed immune fraction should
+    **correlate** with sesame's scalar (not be identical — different references/
+    math); a sample where they diverge flags a tissue-assumption or technical
+    issue. Keep sesame's number as the headline purity gauge; deconvMe is the
+    drill-down (lymphocyte-rich → TIL infiltrate; neutrophil-high → handling).
+  - P4-T1. **Input:** a minfi MethylSet from `result$rgset` (already built as
+    `preprocessRaw(rgset)` for getSex in preprocess.R). deconvMe takes
+    `methyl_set` + `array` ('450k'/'EPIC'). **EPICv2 is not natively supported**
+    → reuse the existing EPICv2→EPIC conversion (the leukocyte path) or skip with
+    a note.
+  - P4-T2. **Run** `deconvMe::deconvolute_combined(methyl_set, methods =
+    c('epidish','houseman'), array = '450k')` from a new `deconvolution.R`
+    module / `perform_qc` (rgset is in scope there). Methods configurable in
+    Settings + run_manifest. Default to the permissive methods (EpiDISH/Houseman/
+    methylCC); **MethAtlas is research-license-only** — gate behind opt-in.
+  - P4-T3. **Output:** write the unified per-sample + aggregated fractions to a
+    new **`deconv/`** directory as `deconv/cell_fractions.csv` (method × cell-type
+    × sample).
+  - P4-T4. **App:** a "Deconvolution" sub-tab in the QC view rendering
+    `deconvMe::results_barplot(result)` (per-sample cell-type barplot), plus a
+    note comparing the summed immune fraction against `Leukocyte_Fraction`.
+  - P4-T5. **Provisioning:** `pak::pkg_install("omnideconv/deconvMe")` (GitHub,
+    not CRAN/Bioc) + the large `FlowSorted.Blood.450k` / `FlowSorted.Blood.EPIC`
+    reference-data packages (yamapData-style) wired into `setup.R` and the
+    release bundle. Informational only — never gates `Pass_QC`.
+  - **Open Q:** which method(s) to make default; whether to surface the
+    aggregated result or per-method; EPICv2 support depth.
+  - **P4-GATE.** A 450k run writes `deconv/cell_fractions.csv` with sensible
+    fractions; the Deconvolution barplot tab renders; the summed immune fraction
+    tracks sesame `Leukocyte_Fraction` on the bundled example.
 
 ---
 
