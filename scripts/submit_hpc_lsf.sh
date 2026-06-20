@@ -6,7 +6,7 @@
 # (samplesheet_450k_hpc.csv, IDATs under /research/groups/orrgrp/...).
 #
 # Submit from the repo root on the cluster:
-#     mkdir -p /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack  # once, for LSF logs
+#     mkdir -p /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack  # once (parent for run dirs + LSF logs)
 #     bsub < scripts/submit_hpc_lsf.sh
 #
 # Set the cluster-side REPO_DIR and SAMPLESHEET paths (marked # <-- EDIT) below,
@@ -24,15 +24,15 @@
 #BSUB -n 2                                  # few cores, big memory (keep == THREADS below)
 #BSUB -R "span[hosts=1] rusage[mem=128GB]"  # 128GB RAM for 220-sample preprocess; raise if it OOMs
 #BSUB -W 2880                               # walltime: 48h in minutes (220 samples + CNV + report)
-#BSUB -o /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/meqtrack_melanoma_450k.%J.out
-#BSUB -e /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/meqtrack_melanoma_450k.%J.err
+#BSUB -o /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_%J/lsf.%J.out
+#BSUB -e /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_%J/lsf.%J.err
 
 set -euo pipefail
 
 # ---- EDIT THESE PATHS (cluster-side, absolute) ------------------------------
 REPO_DIR="/research/groups/orrgrp/projects/MeQTrack_app"                       # <-- EDIT: MeQTrack clone on the cluster
 SAMPLESHEET="/research/groups/orrgrp/projects/Melanoma/samplesheet_450k_hpc.csv" # <-- EDIT: cluster path of the 220-sample sheet
-OUTPUT_DIR="/research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_$(date +%Y%m%d-%H%M%S)"  # timestamped run dir
+OUTPUT_DIR="/research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_${LSB_JOBID}"  # run dir keyed to the LSF job id (matches %J in -o/-e above, so logs land here)
 ARRAY_TYPE="450k"
 THREADS=2                                   # keep equal to "#BSUB -n" above
 
@@ -57,6 +57,11 @@ echo "Output:      $OUTPUT_DIR"
 echo "Array type:  $ARRAY_TYPE   Threads: $THREADS"
 
 mkdir -p "$OUTPUT_DIR"
+
+# Mirror everything (stdout + stderr, incl. pipeline errors) into the run dir so
+# the full log lives with the results. LSF's own -o/-e land here too (same %J
+# dir), but this guarantees the log regardless of LSF's -o dir-creation behavior.
+exec > >(tee "$OUTPUT_DIR/pipeline.${LSB_JOBID}.log") 2>&1
 
 # Run from the repo root so the project .Rprofile activates renv — this is what
 # provides missMethyl, sesame, minfi, conumee2, etc. The pipeline itself
