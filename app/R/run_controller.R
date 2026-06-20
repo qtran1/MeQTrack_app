@@ -353,6 +353,8 @@ run_controller_server <- function(id, ss_state, workspace, project_root_,
                         launch_step("cnv"),           ignoreInit = TRUE)
     shiny::observeEvent(input$run_visualization,
                         launch_step("visualization"), ignoreInit = TRUE)
+    shiny::observeEvent(input$run_deconvolution,
+                        launch_step("deconvolution"), ignoreInit = TRUE)
 
     # --- Cancel button ---------------------------------------------------
     shiny::observeEvent(input$cancel, {
