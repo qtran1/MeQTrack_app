@@ -35,7 +35,7 @@ option_list <- list(
   make_option(c("-c", "--config"), type="character", default=NULL,
               help="Configuration file path", metavar="file"),
   make_option(c("-s", "--step"), type="character", default="all",
-              help="Pipeline step to run [all|preprocess|qc|filtering|dim_reduction|reference_projection|cnv|visualization]",
+              help="Pipeline step to run [all|preprocess|qc|filtering|dim_reduction|reference_projection|deconvolution|cnv|visualization]",
               metavar="step"),
   make_option(c("-a", "--array_type"), type="character", default="auto",
               help="Array type [450k|EPIC|EPICv2|auto]", metavar="type"),
@@ -122,6 +122,7 @@ source("pipeline_modules/qc.R")
 source("pipeline_modules/filtering.R")
 source("pipeline_modules/dim_reduction.R")
 source("pipeline_modules/reference_projection.R")
+source("pipeline_modules/deconvolution.R")
 source("pipeline_modules/cnv_analysis.R")
 source("pipeline_modules/visualization.R")
 source("pipeline_modules/hpc.R")
@@ -474,8 +475,10 @@ run_pipeline <- function(step) {
     write_beta_values(filtered_beta, file.path(dirs$processed, "filtered_beta_values.txt"))
     
     log_message(paste("Filtering complete. Kept", nrow(filtered_beta), "probes."), log_file)
-  } else if (step != "preprocess" && step != "qc" && step != "reference_projection") {
-    # Try to load filtered data if not running filtering
+  } else if (step != "preprocess" && step != "qc" && step != "reference_projection" &&
+             step != "deconvolution") {
+    # Try to load filtered data if not running filtering. Deconvolution (like
+    # reference_projection) works off the raw RGChannelSet, not filtered betas.
     log_message("Loading filtered beta values...", log_file)
     filtered_file <- file.path(dirs$processed, "filtered_beta_values.txt")
     
@@ -671,6 +674,36 @@ run_pipeline <- function(step) {
           "Reference projection complete: %d sample(s) projected onto '%s'.",
           nrow(rp_result$projected), rp_dataset), log_file)
       }
+    }
+  }
+
+  # Cell-type deconvolution (deconvMe) — OPT-IN standalone step, deliberately
+  # NOT part of "all" (heavy/optional deps; tumour-specific relevance). Works off
+  # the reloaded RGChannelSet; never gates Pass_QC.
+  if (step == "deconvolution") {
+    log_message("Cell-type deconvolution (deconvMe)", log_file)
+
+    dc_methods <- c("epidish", "houseman")
+    if (!is.null(config$deconvolution) && !is.null(config$deconvolution$methods)) {
+      dc_methods <- config$deconvolution$methods
+    }
+
+    dc_result <- tryCatch(
+      run_deconvolution(
+        rgset      = rgset,
+        array_type = array_type,
+        methods    = dc_methods,
+        output_dir = dirs$deconv
+      ),
+      error = function(e) {
+        log_message(paste("Deconvolution failed:", conditionMessage(e)), log_file)
+        NULL
+      }
+    )
+    if (!is.null(dc_result)) {
+      log_message(sprintf(
+        "Deconvolution complete: cell_fractions.csv written (%d rows).",
+        nrow(dc_result)), log_file)
     }
   }
 
