@@ -262,15 +262,20 @@ stages `Anno/` into the release zip.
   (https://github.com/omnideconv/deconvMe), which wraps 5 methods directly
   applicable to Illumina array data: **EpiDISH, Houseman, MethAtlas, methylCC,
   methylResolver**.
-  - **Why / how it relates to sesame leukocyte:** sesame `Leukocyte_Fraction`
-    answers *how much* immune content (one scalar, 2-component purity model);
-    deconvMe answers *which* cell types and in what proportion (a composition
-    vector — CD4T/CD8T/NK/B/Mono/Neutrophil/…). Complementary, not redundant.
-    They cross-validate: across samples the summed immune fraction should
-    **correlate** with sesame's scalar (not be identical — different references/
-    math); a sample where they diverge flags a tissue-assumption or technical
-    issue. Keep sesame's number as the headline purity gauge; deconvMe is the
-    drill-down (lymphocyte-rich → TIL infiltrate; neutrophil-high → handling).
+  - **Why / how it relates to sesame leukocyte (VERIFIED on the 450k example):**
+    sesame `Leukocyte_Fraction` answers *how much* immune content (one scalar,
+    2-component purity); deconvMe answers *which* cell types and in what
+    proportion (B/CD4T/CD8T/NK/Mono/Neutrophil, EpiDISH adds an `other` =
+    non-blood residual). **They are NOT interchangeable, especially on tumours.**
+    On the bundled TCGA tumour 450k samples they disagree hard: sesame leukocyte
+    ≈ **0.05**, but EpiDISH summed-immune ≈ **0.82–0.85** and Houseman ≈
+    **1.11–1.14** (Houseman/estimateCellCounts2 isn't sum-to-1). Reason: the
+    blood references force-fit tumour methylation into blood cell types — they
+    estimate the *composition of the immune compartment*, not *how much* immune.
+    → **sesame `Leukocyte_Fraction` stays the purity/contamination number;
+    deconvMe is the relative immune-subtype profile** (lymphocyte-rich → TIL,
+    neutrophil-high → handling). The summed-immune ≈ sesame cross-check only
+    holds for blood-like samples; a large gap on tumours is expected, not a bug.
   - P4-T1. **Input:** a minfi MethylSet from `result$rgset` (already built as
     `preprocessRaw(rgset)` for getSex in preprocess.R). deconvMe takes
     `methyl_set` + `array` ('450k'/'EPIC'). **EPICv2 is not natively supported**
@@ -281,16 +286,26 @@ stages `Anno/` into the release zip.
     module / `perform_qc` (rgset is in scope there). Methods configurable in
     Settings + run_manifest. Default to the permissive methods (EpiDISH/Houseman/
     methylCC); **MethAtlas is research-license-only** — gate behind opt-in.
-  - P4-T3. **Output:** write the unified per-sample + aggregated fractions to a
-    new **`deconv/`** directory as `deconv/cell_fractions.csv` (method × cell-type
-    × sample).
-  - P4-T4. **App:** a "Deconvolution" sub-tab in the QC view rendering
-    `deconvMe::results_barplot(result)` (per-sample cell-type barplot), plus a
-    note comparing the summed immune fraction against `Leukocyte_Fraction`.
+  - P4-T3. **Output (VERIFIED):** `deconvolute_combined()` returns a tidy LONG
+    table `(method, sample, celltype, value)` with an extra `aggregated` method
+    row-set — write it straight to **`deconv/cell_fractions.csv`** (no reshaping
+    needed). EpiDISH names: B cell / T cell CD4+ / T cell CD8+ / NK cell /
+    Monocyte / Neutrophil / other.
+  - P4-T4. **App:** a "Deconvolution" sub-tab in the QC view. **Caveat
+    (VERIFIED):** `deconvMe::results_barplot()` works on a single-method
+    `deconvolute()` result (returns a ggplot) but ERRORS on the
+    `deconvolute_combined()` result ("Column name `sample` must not be
+    duplicated"). So either call `deconvolute()` per method for the barplot, or
+    build our own stacked ggplot from the long CSV (preferred — one plot, method
+    facets/selector). Add a note comparing summed-immune vs `Leukocyte_Fraction`.
   - P4-T5. **Provisioning:** `pak::pkg_install("omnideconv/deconvMe")` (GitHub,
     not CRAN/Bioc) + the large `FlowSorted.Blood.450k` / `FlowSorted.Blood.EPIC`
     reference-data packages (yamapData-style) wired into `setup.R` and the
-    release bundle. Informational only — never gates `Pass_QC`.
+    release bundle. `methylcc`/`methatlas` pull a **Python backend**
+    (`deconvMe::init_python()`, basilisk/reticulate-style) — EpiDISH + Houseman
+    are pure-R, so default to those to avoid the Python provisioning. Note:
+    `deconvolute()` takes no `array` arg (only `deconvolute_combined()` does).
+    Informational only — never gates `Pass_QC`.
   - **Open Q:** which method(s) to make default; whether to surface the
     aggregated result or per-method; EPICv2 support depth.
   - **P4-GATE.** A 450k run writes `deconv/cell_fractions.csv` with sensible
