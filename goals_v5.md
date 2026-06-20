@@ -257,11 +257,17 @@ stages `Anno/` into the release zip.
     per-sample "Dye bias" QQ tab were added.)
 
 - **Phase 4 — Cell-type deconvolution (deconvMe) — PLANNED (v2.4.0, post-v2.3.0).**
-  Add reference-based immune cell-type deconvolution alongside sesame's single
-  leukocyte-fraction scalar, via the omnideconv **deconvMe** package
-  (https://github.com/omnideconv/deconvMe), which wraps 5 methods directly
-  applicable to Illumina array data: **EpiDISH, Houseman, MethAtlas, methylCC,
-  methylResolver**.
+  A **standalone, opt-in pipeline step** (NOT part of QC) — reference-based
+  immune cell-type deconvolution via the omnideconv **deconvMe** package
+  (https://github.com/omnideconv/deconvMe), wrapping 5 methods for Illumina
+  array data: **EpiDISH, Houseman, MethAtlas, methylCC, methylResolver**.
+  Architected exactly like `reference_projection`: its own `--step
+  deconvolution`, own `deconvolution.R` module, own `deconv/` output dir, own
+  top-level "Deconvolution" app tab + Run-tab per-step button, reloading
+  `preprocessed_data.RData` so it runs independently. It is an analysis, not a
+  QC gate — never touches `Pass_QC`, and (decision) is **excluded from
+  `--step all`** so a standard run never needs the deconv deps; the user runs
+  it explicitly.
   - **Why / how it relates to sesame leukocyte (VERIFIED on the 450k example):**
     sesame `Leukocyte_Fraction` answers *how much* immune content (one scalar,
     2-component purity); deconvMe answers *which* cell types and in what
@@ -276,28 +282,33 @@ stages `Anno/` into the release zip.
     deconvMe is the relative immune-subtype profile** (lymphocyte-rich → TIL,
     neutrophil-high → handling). The summed-immune ≈ sesame cross-check only
     holds for blood-like samples; a large gap on tumours is expected, not a bug.
-  - P4-T1. **Input:** a minfi MethylSet from `result$rgset` (already built as
-    `preprocessRaw(rgset)` for getSex in preprocess.R). deconvMe takes
-    `methyl_set` + `array` ('450k'/'EPIC'). **EPICv2 is not natively supported**
-    → reuse the existing EPICv2→EPIC conversion (the leukocyte path) or skip with
-    a note.
-  - P4-T2. **Run** `deconvMe::deconvolute_combined(methyl_set, methods =
-    c('epidish','houseman'), array = '450k')` from a new `deconvolution.R`
-    module / `perform_qc` (rgset is in scope there). Methods configurable in
-    Settings + run_manifest. Default to the permissive methods (EpiDISH/Houseman/
-    methylCC); **MethAtlas is research-license-only** — gate behind opt-in.
+  - P4-T1. **Input:** the new step reloads `preprocessed_data.RData`, takes
+    `result$rgset`, and builds a minfi MethylSet via `preprocessRaw(rgset)` (same
+    call preprocess already makes for getSex). deconvMe takes `methyl_set` +
+    `array` ('450k'/'EPIC'). **EPICv2 is not natively supported** → reuse the
+    existing EPICv2→EPIC conversion (the leukocyte path) or skip with a note.
+  - P4-T2. **Run** `deconvMe::deconvolute_combined(methyl_set, array = '450k',
+    methods = c('epidish','houseman'))` in `deconvolution.R`, dispatched by
+    `--step deconvolution` (guarded `step == "deconvolution"` only — NOT in
+    "all"). Methods configurable in Settings + run_manifest. Default to the
+    pure-R methods (EpiDISH + Houseman); **MethAtlas is research-license-only**
+    and methylCC/methatlas need Python — gate those behind opt-in.
   - P4-T3. **Output (VERIFIED):** `deconvolute_combined()` returns a tidy LONG
     table `(method, sample, celltype, value)` with an extra `aggregated` method
     row-set — write it straight to **`deconv/cell_fractions.csv`** (no reshaping
     needed). EpiDISH names: B cell / T cell CD4+ / T cell CD8+ / NK cell /
     Monocyte / Neutrophil / other.
-  - P4-T4. **App:** a "Deconvolution" sub-tab in the QC view. **Caveat
-    (VERIFIED):** `deconvMe::results_barplot()` works on a single-method
-    `deconvolute()` result (returns a ggplot) but ERRORS on the
+  - P4-T4. **App:** a new **top-level "Deconvolution" tab** (sibling of QC /
+    Dim. reduction / Reference projection / CNV), loaded by `results_loader`
+    from `deconv/cell_fractions.csv`, plus a Run-tab per-step "Deconvolution"
+    button. **Caveat (VERIFIED):** `deconvMe::results_barplot()` works on a
+    single-method `deconvolute()` result (ggplot) but ERRORS on the
     `deconvolute_combined()` result ("Column name `sample` must not be
     duplicated"). So either call `deconvolute()` per method for the barplot, or
-    build our own stacked ggplot from the long CSV (preferred — one plot, method
-    facets/selector). Add a note comparing summed-immune vs `Leukocyte_Fraction`.
+    build our own stacked ggplot/plotly from the long CSV (preferred — method
+    selector/facets). Include a note comparing summed-immune vs
+    `Leukocyte_Fraction` (and the tumour caveat above so the gap doesn't read as
+    a failure).
   - P4-T5. **Provisioning:** `pak::pkg_install("omnideconv/deconvMe")` (GitHub,
     not CRAN/Bioc) + the large `FlowSorted.Blood.450k` / `FlowSorted.Blood.EPIC`
     reference-data packages (yamapData-style) wired into `setup.R` and the
@@ -307,10 +318,12 @@ stages `Anno/` into the release zip.
     `deconvolute()` takes no `array` arg (only `deconvolute_combined()` does).
     Informational only — never gates `Pass_QC`.
   - **Open Q:** which method(s) to make default; whether to surface the
-    aggregated result or per-method; EPICv2 support depth.
-  - **P4-GATE.** A 450k run writes `deconv/cell_fractions.csv` with sensible
-    fractions; the Deconvolution barplot tab renders; the summed immune fraction
-    tracks sesame `Leukocyte_Fraction` on the bundled example.
+    aggregated result or per-method; EPICv2 support depth; whether to ever fold
+    it into `--step all` (default: no, keep opt-in).
+  - **P4-GATE.** `--step deconvolution` on a 450k run writes
+    `deconv/cell_fractions.csv` with sensible fractions; the top-level
+    Deconvolution barplot tab renders; `--step all` is unaffected (does not run
+    or require deconv); the tumour-vs-blood-ref interpretation note is shown.
 
 ---
 
