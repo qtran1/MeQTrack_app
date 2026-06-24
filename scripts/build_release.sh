@@ -116,6 +116,10 @@ mkdir -p "${stage_dir}"
 echo
 echo "Staging into ${stage_dir} ..."
 
+# NOTE: only the named directories/files below are staged. The dev-only
+# `mcp/` tree (Python MCP server) is intentionally NOT bundled into the
+# end-user release — do not add an `rsync mcp/` here.
+
 rsync -a --exclude=".DS_Store" --exclude="*.Rhistory" \
   app/ "${stage_dir}/app/"
 

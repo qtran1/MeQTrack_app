@@ -406,6 +406,35 @@ plot_reference_projection <- function(reference, projected, output_dir = ".",
 
   ggsave(file, p, width = plot_width, height = plot_height)
   message("plot_reference_projection: wrote ", file)
+
+  # Interactive HTML companion (same plot, hover-able). The static PDF omits
+  # per-sample labels to avoid crowding; here we surface query sample names on
+  # hover instead. Guarded + best-effort so a missing plotly/htmlwidgets or a
+  # render hiccup never fails the projection step — the PDF above is the
+  # canonical artifact.
+  if (requireNamespace("plotly", quietly = TRUE) &&
+      requireNamespace("htmlwidgets", quietly = TRUE)) {
+    tryCatch({
+      html_file <- sub("\\.pdf$", ".html", file)
+
+      # Add a tooltip-bearing layer for the query points so hovering a diamond
+      # shows its sample name; reference points show their tumour group.
+      p_int <- p +
+        geom_point(data = projected,
+                   aes(x = tSNE1, y = tSNE2, text = Sample),
+                   shape = 23, size = 2.5, stroke = 0.6,
+                   fill = "#111111", colour = "white")
+
+      widget <- plotly::ggplotly(p_int, tooltip = c("text", "fill"))
+      # saveWidget needs an absolute path and writes self-contained by default.
+      htmlwidgets::saveWidget(widget, normalizePath(html_file, mustWork = FALSE),
+                              selfcontained = TRUE)
+      message("plot_reference_projection: wrote ", html_file)
+    }, error = function(e) {
+      warning("plot_reference_projection: interactive HTML skipped: ", e$message)
+    })
+  }
+
   invisible(file)
 }
 

@@ -487,30 +487,37 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   seg_file <- file.path(seg_dir, paste0(clean_sample_id, "_cnv_segments.seg"))
   CNV.write(cnv_segment, what = "segments", file = seg_file)
   
-  # Extract segments as data frame for downstream processing
-  segments_df <- tryCatch({
-    # Try to extract segments from the S4 object
-    if (class(cnv_segment)[1] == "CNV.analysis") {
-      seg_data <- cnv_segment@seg
-      # Ensure it's a data frame with proper column names
-      if (!is.data.frame(seg_data)) {
-        seg_data <- as.data.frame(seg_data)
-      }
-      seg_data
-    } else {
-      # Fallback: read the segments file we just wrote
-      seg_data <- read.table(seg_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-      # Fix column names that may have been mangled by R
-      colnames(seg_data) <- fix_column_names(colnames(seg_data))
-      seg_data
-    }
-  }, error = function(e) {
-    message("Warning: Could not extract segments from CNV object, reading from file: ", e$message)
-    # Read from the file we just wrote
-    seg_data <- read.table(seg_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-    # Fix column names that may have been mangled by R
+  # Extract segments as a data frame for downstream processing.
+  #
+  # conumee2 stores segments in the @seg slot as a *list*, not a data frame:
+  #   @seg$summary  - per-sample list of DNAcopy segment summaries, each a
+  #                   data frame with ID/chrom/loc.start/loc.end/num.mark/
+  #                   seg.mean/seg.median columns (the table we want)
+  #   @seg$p, @seg$args - segmentation p-values and call args (not needed here)
+  # Single-sample CNV.fit() means @seg$summary has one element. Reading that
+  # element directly gives a clean data frame with the right column names —
+  # unlike as.data.frame(@seg) (coerces the nested list and errors) or the
+  # CNV.write() file (prefixes every column with the sample name, which is
+  # why the file path below needs fix_column_names()).
+  read_segments_from_file <- function() {
+    seg_data <- read.table(seg_file, header = TRUE, sep = "\t",
+                           stringsAsFactors = FALSE)
     colnames(seg_data) <- fix_column_names(colnames(seg_data))
     seg_data
+  }
+  segments_df <- tryCatch({
+    seg_summary <- cnv_segment@seg$summary
+    if (is.list(seg_summary) && length(seg_summary) >= 1 &&
+        is.data.frame(seg_summary[[1]])) {
+      seg_summary[[1]]
+    } else {
+      # Unexpected @seg shape — fall back to the file conumee2 wrote.
+      read_segments_from_file()
+    }
+  }, error = function(e) {
+    message("Warning: Could not extract segments from CNV object, reading from file: ",
+            e$message)
+    read_segments_from_file()
   })
   
   # Return results

@@ -8,8 +8,9 @@
 #
 # Expected outcome:
 #   runs/example_<timestamp>/... is created with subfolders:
-#     preprocess/ qc/ filtering/ dim_reduction/ cnv/ report/ logs/
-#   and runs/example_<timestamp>/report/ contains an .html report.
+#     processed_data/ qc/ dimensionality_reduction/ cnv/
+#     reference_projection/ figures/ reports/
+#   and runs/example_<timestamp>/reports/ contains an .html report.
 
 # Activate renv so we get the project's library.
 if (file.exists("renv/activate.R")) {
@@ -66,7 +67,8 @@ if (result != 0) {
 
 # Verify the expected output tree exists.
 expected_subdirs <- c(
-  "preprocess", "qc", "filtering", "dim_reduction", "cnv", "report", "logs"
+  "processed_data", "qc", "dimensionality_reduction", "cnv",
+  "reference_projection", "figures", "reports"
 )
 missing <- expected_subdirs[!vapply(
   file.path(output_dir, expected_subdirs),
@@ -83,14 +85,14 @@ if (length(missing) > 0) {
 
 # Locate the report.
 report_files <- list.files(
-  file.path(output_dir, "report"),
+  file.path(output_dir, "reports"),
   pattern = "\\.html$",
   full.names = TRUE
 )
 
 if (length(report_files) == 0) {
-  message("No HTML report found in report/. This may be OK if rmarkdown/pandoc are missing; ",
-          "check logs/ for details.")
+  message("No HTML report found in reports/. This may be OK if rmarkdown/pandoc are missing; ",
+          "check pipeline_log.txt for details.")
 } else {
   message(sprintf("Report: %s", report_files[1]))
 }
