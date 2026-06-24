@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "meqtrack": {
+      "type": "stdio",
+      "command": "${workspaceFolder}${/}mcp${/}.venv${/}bin${/}meqtrack-mcp",
+      "env": {
+        "MEQTRACK_WORKSPACE": "${userHome}${/}MeQTrack"
+      }
+    }
+  }
+}
