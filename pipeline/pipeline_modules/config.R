@@ -77,7 +77,7 @@ default_config <- function() {
       sample_detection_p_threshold   = 0.05,
       failed_probe_percent_threshold = 25,
       min_median_intensity           = 10.5,
-      max_gct_score                  = 1.3,   # GCT bisulfite-conversion fail cutoff (~1.0 = complete)
+      max_gct_score                  = 1.8,   # GCT bisulfite-conversion fail cutoff (~1.0 = complete)
       filter_failed_samples          = TRUE
     ),
 
@@ -131,6 +131,13 @@ default_config <- function() {
       knn_k         = 25              # neighbours for the nearest-class diagnostic
     ),
 
+    # Cell-type deconvolution (deconvMe). Opt-in step (--step deconvolution),
+    # NOT part of --step all. EpiDISH + Houseman are pure-R; methylcc/methatlas
+    # need a Python backend and methatlas is research-license-only.
+    deconvolution = list(
+      methods = c("epidish", "houseman")
+    ),
+
     # Output
     output = list(
       include_interactive_plots = TRUE,
@@ -151,6 +158,7 @@ setup_directories <- function(main_dir) {
     dim_reduction         = file.path(main_dir, "dimensionality_reduction"),
     cnv                   = file.path(main_dir, "cnv"),
     reference_projection  = file.path(main_dir, "reference_projection"),
+    deconv                = file.path(main_dir, "deconv"),
     figures               = figures,
     figures_qc            = file.path(figures, "qc"),
     figures_dim_reduction = file.path(figures, "dim_reduction"),
