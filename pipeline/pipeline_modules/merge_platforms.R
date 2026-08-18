@@ -150,14 +150,23 @@ merge_platform_betas <- function(sources, policy = "intersection",
   platform_of_sample <- rep(names(mats), vapply(mats, ncol, integer(1)))
   names(platform_of_sample) <- all_cols
 
-  pct <- 100 * length(common) / max(n_probes)
+  # Judge the intersection against the SMALLEST platform, not the largest: the
+  # smallest manifest is the hard ceiling on what any intersection can retain,
+  # so measuring against the largest would flag healthy merges as broken. A
+  # 450K+EPICv2 merge, for instance, keeps ~81% of 450K but only ~40% of
+  # EPICv2 -- entirely expected, since 450K carries ~485K probes to EPICv2's
+  # ~924K. Reference values for the manifests (EPICv2 suffix-stripped):
+  #   450K+EPIC 452K (93% of 450K), 450K+EPICv2 394K (81%),
+  #   EPIC+EPICv2 721K (83%), all three 370K (76%).
+  pct <- 100 * length(common) / min(n_probes)
+  smallest <- names(n_probes)[which.min(n_probes)]
   message(sprintf(
-    "merge_platform_betas: %d common probes (%.1f%% of the largest platform's %d); %d samples total.",
-    length(common), pct, max(n_probes), ncol(beta)))
-  if (pct < 40) {
+    "merge_platform_betas: %d common probes (%.1f%% of the smallest platform, %s at %d); %d samples total.",
+    length(common), pct, smallest, min(n_probes), ncol(beta)))
+  if (pct < 60) {
     warning(sprintf(
-      "merge_platform_betas: intersection retains only %.1f%% of probes — check that platforms were preprocessed consistently.",
-      pct))
+      "merge_platform_betas: intersection retains only %.1f%% of the smallest platform (%s) — check that platforms were preprocessed consistently.",
+      pct, smallest))
   }
 
   # NA audit: intersection removes platform-specific probes but not probes that

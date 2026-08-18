@@ -35,7 +35,7 @@ option_list <- list(
   make_option(c("-c", "--config"), type="character", default=NULL,
               help="Configuration file path", metavar="file"),
   make_option(c("-s", "--step"), type="character", default="all",
-              help="Pipeline step to run [all|preprocess|qc|filtering|dim_reduction|reference_projection|deconvolution|cnv|visualization]",
+              help="Pipeline step to run [all|preprocess|qc|filtering|dim_reduction|reference_projection|deconvolution|cnv|visualization|merge]",
               metavar="step"),
   make_option(c("-a", "--array_type"), type="character", default="auto",
               help="Array type [450k|EPIC|EPICv2|auto]", metavar="type"),
@@ -48,7 +48,28 @@ option_list <- list(
   make_option(c("-i", "--input"), type="character", default="./example/sample_sheet.csv",
               help="Path to sample sheet CSV file", metavar="file"),
   make_option("--hpc", action="store_true", default=FALSE,
-              help="Generate HPC submission scripts")
+              help="Generate HPC submission scripts"),
+  # --- cross-platform merging (--step merge) ---------------------------------
+  make_option("--merge_sources", type="character", default=NULL,
+              help=paste("Completed per-platform run directories to merge, as",
+                         "PLATFORM=DIR pairs separated by commas, e.g.",
+                         "'EPIC=/runs/epic,EPICv2=/runs/epicv2'. Required for",
+                         "--step merge."),
+              metavar="pairs"),
+  make_option("--merge_which", type="character", default="raw",
+              help="Which beta matrix to merge [raw|filtered] (default raw)",
+              metavar="which"),
+  make_option("--batch_correct", action="store_true", default=FALSE,
+              help=paste("Apply ComBat platform batch correction to the merged",
+                         "cohort, writing beta_values_combat.txt.gz alongside",
+                         "the uncorrected matrix. Diagnostics are reported",
+                         "either way.")),
+  make_option("--batch_covariates", type="character", default=NULL,
+              help=paste("Comma-separated sample_info columns to protect from",
+                         "ComBat (e.g. 'Group'). Omit for a single-group",
+                         "cohort. A covariate collinear with platform is not",
+                         "identifiable."),
+              metavar="cols")
 )
 
 opt_parser <- OptionParser(
@@ -126,6 +147,8 @@ source("pipeline_modules/deconvolution.R")
 source("pipeline_modules/cnv_analysis.R")
 source("pipeline_modules/visualization.R")
 source("pipeline_modules/hpc.R")
+source("pipeline_modules/array_detect.R")
+source("pipeline_modules/merge_platforms.R")
 
 # Set up pipeline variables
 cat("Setting up methylation array analysis pipeline...\n")
@@ -167,6 +190,150 @@ log_message(paste("Threads:", opt$threads), log_file)
 if (opt$hpc) {
   log_message("Generating HPC submission scripts", log_file)
   generate_hpc_scripts(config, opt, main_dir)
+  quit(save = "no", status = 0)
+}
+
+# ---------------------------------------------------------------------------
+# Cross-platform merge (--step merge)
+#
+# Runs before run_pipeline() because it consumes completed per-platform run
+# directories rather than a sample sheet: platforms must be preprocessed
+# separately (minfi's read.metharray.exp(force = TRUE) silently truncates to
+# the smallest common probe set when IDAT sizes differ), so there is nothing
+# for a single mixed run to do upstream of beta values.
+#
+# Any mix of 450K / EPIC / EPICv2 is supported, and so is more than two
+# platforms at once. Expected intersections, from the manifests:
+#   450K+EPIC 452K, 450K+EPICv2 394K, EPIC+EPICv2 721K, all three 370K --
+# all far above the ~10K probes dimensionality reduction actually uses.
+#
+# Writes a merged tree that the ordinary dim_reduction / reference_projection /
+# cnv steps can then be pointed at with -o, unchanged.
+# ---------------------------------------------------------------------------
+
+#' Parse --merge_sources "EPIC=/a,EPICv2=/b" into a named character vector.
+parse_merge_sources <- function(spec) {
+  if (is.null(spec) || !nzchar(spec)) {
+    stop("--step merge requires --merge_sources 'PLATFORM=DIR,PLATFORM=DIR'.")
+  }
+  parts <- trimws(strsplit(spec, ",", fixed = TRUE)[[1]])
+  parts <- parts[nzchar(parts)]
+  if (!length(parts)) stop("--merge_sources is empty.")
+
+  kv <- regmatches(parts, regexec("^([^=]+)=(.+)$", parts))
+  bad <- vapply(kv, function(m) length(m) != 3L, logical(1))
+  if (any(bad)) {
+    stop("--merge_sources entries must be PLATFORM=DIR; malformed: ",
+         paste(parts[bad], collapse = ", "))
+  }
+  labels <- trimws(vapply(kv, `[`, character(1), 2L))
+  paths  <- trimws(vapply(kv, `[`, character(1), 3L))
+
+  # Normalise labels so 'epicv2', 'EPIC_v2' and '450k' agree with the rest of
+  # the pipeline, but keep an unrecognised label rather than dropping the
+  # source -- the user may be merging something we don't know about.
+  canon <- canonical_array_type(labels)
+  labels <- ifelse(is.na(canon), labels, canon)
+  if (anyDuplicated(labels)) {
+    stop("Duplicate platform label(s) in --merge_sources: ",
+         paste(unique(labels[duplicated(labels)]), collapse = ", "))
+  }
+  stats::setNames(paths, labels)
+}
+
+run_merge_step <- function() {
+  log_message("Step: merging per-platform runs into one cohort", log_file)
+  sources <- parse_merge_sources(opt$merge_sources)
+  log_message(paste("Merge sources:",
+                    paste(sprintf("%s=%s", names(sources), sources),
+                          collapse = ", ")), log_file)
+
+  res <- merge_platforms(sources, output_dir = main_dir,
+                         policy = "intersection", which = opt$merge_which)
+  log_message(sprintf("Merged cohort: %d probes x %d samples",
+                      nrow(res$beta), ncol(res$beta)), log_file)
+
+  si <- res$sample_info
+  platform <- si$Platform[match(colnames(res$beta), si$Sample_ID)]
+
+  # Always report how strongly platform structures the merged cohort, whether
+  # or not we are about to correct it. pred_sex, when present, doubles as a
+  # biological negative control: correction should leave it detectable.
+  control <- if ("pred_sex" %in% names(si)) {
+    si$pred_sex[match(colnames(res$beta), si$Sample_ID)]
+  } else NULL
+
+  diag_before <- tryCatch(
+    platform_batch_diagnostics(res$beta, platform, control = control),
+    error = function(e) {
+      log_message(paste("Batch diagnostics skipped:", conditionMessage(e)),
+                  log_file)
+      NULL
+    })
+  if (!is.null(diag_before)) {
+    log_message(sprintf(
+      "Platform effect before correction: p(PC1)=%.3g p(PC2)=%.3g, corr gap %+.4f",
+      diag_before$p_platform[1], diag_before$p_platform[2],
+      diag_before$corr_gap), log_file)
+    if (!opt$batch_correct && diag_before$corr_gap > 0.05) {
+      log_message(paste("NOTE: samples resemble their platform-mates more than",
+                        "other samples. Consider --batch_correct."), log_file)
+    }
+  }
+
+  if (opt$batch_correct) {
+    covars <- NULL
+    if (!is.null(opt$batch_covariates) && nzchar(opt$batch_covariates)) {
+      cols <- trimws(strsplit(opt$batch_covariates, ",", fixed = TRUE)[[1]])
+      cols <- cols[nzchar(cols)]
+      missing_cols <- setdiff(cols, names(si))
+      if (length(missing_cols)) {
+        stop("--batch_covariates column(s) not in merged sample_info: ",
+             paste(missing_cols, collapse = ", "),
+             ". Available: ", paste(names(si), collapse = ", "))
+      }
+      covars <- si[match(colnames(res$beta), si$Sample_ID), cols, drop = FALSE]
+      log_message(paste("Protecting covariate(s) from ComBat:",
+                        paste(cols, collapse = ", ")), log_file)
+    }
+
+    cc <- correct_platform_batch(res$beta, platform, covariates = covars)
+    out_path <- file.path(dirs$processed, "beta_values_combat.txt.gz")
+    con <- gzfile(out_path, "w")
+    utils::write.table(
+      data.frame(ProbeID = rownames(cc$beta), cc$beta, check.names = FALSE),
+      con, sep = "\t", quote = FALSE, row.names = FALSE)
+    close(con)
+    log_message(sprintf("Batch-corrected betas written: %s (%d probes)",
+                        out_path, nrow(cc$beta)), log_file)
+
+    diag_after <- tryCatch(
+      platform_batch_diagnostics(cc$beta, platform, control = control),
+      error = function(e) NULL)
+    if (!is.null(diag_after)) {
+      log_message(sprintf(
+        "Platform effect after correction: p(PC1)=%.3g p(PC2)=%.3g, corr gap %+.4f",
+        diag_after$p_platform[1], diag_after$p_platform[2],
+        diag_after$corr_gap), log_file)
+      if (!is.null(control) && !is.na(diag_after$p_control[2])) {
+        log_message(sprintf(
+          "Control signal (pred_sex) after correction: p(PC1)=%.3g p(PC2)=%.3g",
+          diag_after$p_control[1], diag_after$p_control[2]), log_file)
+      }
+      if (!is.null(diag_before) && diag_after$corr_gap > diag_before$corr_gap) {
+        warning("ComBat did not reduce the within/between-platform correlation ",
+                "gap; inspect the diagnostics before using the corrected matrix.")
+      }
+    }
+  }
+
+  log_message("Merge step complete.", log_file)
+  invisible(res)
+}
+
+if (opt$step == "merge") {
+  run_merge_step()
+  log_message(paste("Merged output written to:", main_dir), log_file)
   quit(save = "no", status = 0)
 }
 
