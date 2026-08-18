@@ -6,6 +6,8 @@
 #   merge_platform_sample_info(sources)
 #   merge_platform_segments(sources, output_file)
 #   merge_platforms(sources, output_dir, policy)
+#   correct_platform_batch(beta, platform, covariates = NULL)
+#   platform_batch_diagnostics(beta, platform, control = NULL)
 #
 # A "source" is one completed single-platform run directory plus the platform
 # label it was run as. Preprocessing must be per-platform: minfi's
@@ -367,4 +369,155 @@ merge_platforms <- function(sources, output_dir, policy = "intersection",
           ncol(bm$beta), " samples ===")
   invisible(list(beta = bm$beta, sample_info = si, segments = segs,
                  summary = summary_df, beta_path = beta_path))
+}
+
+# ---------------------------------------------------------------------------
+# Platform batch correction
+# ---------------------------------------------------------------------------
+
+#' Beta <-> M-value conversion.
+#'
+#' Beta is bounded [0,1] and strongly heteroscedastic (variance collapses at
+#' both ends), which violates ComBat's assumption of roughly homoscedastic
+#' normal errors. M-values are the standard remedy. Values are clamped away
+#' from 0/1 so the logit stays finite.
+#'
+#' @param b   Beta matrix.
+#' @param eps Clamp distance from 0 and 1.
+#' @return M-value matrix.
+beta_to_m <- function(b, eps = 1e-4) {
+  b <- pmin(pmax(as.matrix(b), eps), 1 - eps)
+  log2(b / (1 - b))
+}
+
+#' @rdname beta_to_m
+m_to_beta <- function(m) 2^m / (1 + 2^m)
+
+#' Remove array-platform batch effects from a merged beta matrix.
+#'
+#' Uses ComBat (empirical-Bayes location/scale adjustment) on M-values. ComBat
+#' is preferred over limma::removeBatchEffect here because per-probe variance
+#' estimates are poor at the small per-platform sample sizes typical of a mixed
+#' cohort; ComBat shrinks those estimates toward a common prior, which
+#' removeBatchEffect does not do.
+#'
+#' Pass biological covariates you want protected via \code{covariates} — ComBat
+#' will not absorb them into the batch term. Omit it when the cohort is a single
+#' biological group. A covariate collinear with platform is not identifiable and
+#' will make ComBat fail or mis-adjust; the design must be at least partly
+#' balanced across platforms.
+#'
+#' Probes containing any NA, and probes with zero within-platform variance, are
+#' dropped — ComBat handles neither.
+#'
+#' @param beta       Merged beta matrix, probes x samples.
+#' @param platform   Platform label per sample (length = ncol(beta)).
+#' @param covariates Optional data frame of covariates to preserve.
+#' @return List: beta (corrected), n_probes_in, n_probes_out, dropped_na,
+#'         dropped_invariant.
+correct_platform_batch <- function(beta, platform, covariates = NULL) {
+  if (!requireNamespace("sva", quietly = TRUE)) {
+    stop("Package 'sva' is required for ComBat batch correction.")
+  }
+  beta <- as.matrix(beta)
+  platform <- as.character(platform)
+  if (length(platform) != ncol(beta)) {
+    stop("`platform` length (", length(platform),
+         ") must equal ncol(beta) (", ncol(beta), ").")
+  }
+  tb <- table(platform)
+  if (length(tb) < 2) {
+    stop("Batch correction needs >= 2 platforms; got ", length(tb), ".")
+  }
+  if (any(tb < 2)) {
+    stop("Every platform needs >= 2 samples for ComBat; got: ",
+         paste(sprintf("%s=%d", names(tb), tb), collapse = ", "))
+  }
+
+  n_in    <- nrow(beta)
+  na_rows <- apply(beta, 1, anyNA)
+  beta    <- beta[!na_rows, , drop = FALSE]
+
+  # Zero within-platform SD breaks ComBat's scale term.
+  min_sd <- apply(beta, 1, function(x) min(tapply(x, platform, stats::sd)))
+  inv    <- is.na(min_sd) | min_sd <= 1e-8
+  beta   <- beta[!inv, , drop = FALSE]
+
+  if (nrow(beta) == 0) stop("No usable probes left for batch correction.")
+  message(sprintf(
+    "correct_platform_batch: %d probes in; dropped %d with NA, %d within-platform-invariant; %d remain.",
+    n_in, sum(na_rows), sum(inv), nrow(beta)))
+
+  mod <- if (is.null(covariates)) {
+    stats::model.matrix(~ 1, data = data.frame(row.names = colnames(beta)))
+  } else {
+    cv <- as.data.frame(covariates)
+    if (nrow(cv) != ncol(beta)) stop("`covariates` must have one row per sample.")
+    stats::model.matrix(~ ., data = cv)
+  }
+
+  corrected <- sva::ComBat(dat = beta_to_m(beta), batch = platform, mod = mod,
+                           par.prior = TRUE, prior.plots = FALSE)
+
+  list(beta = m_to_beta(corrected), n_probes_in = n_in,
+       n_probes_out = nrow(beta), dropped_na = sum(na_rows),
+       dropped_invariant = sum(inv))
+}
+
+#' Quantify how strongly platform structures a merged cohort.
+#'
+#' Two complementary read-outs, computed on the top-variance probes:
+#'   * ANOVA of PC1/PC2 against platform — a *small* p means platform drives
+#'     the dominant axes of variation (bad).
+#'   * mean within- minus between-platform sample correlation — a *positive*
+#'     gap means samples resemble their platform-mates more than anything else
+#'     (bad). A successful correction drives the gap toward zero or negative.
+#'
+#' \code{control} is an optional known biological grouping (e.g. predicted sex)
+#' used as a negative control: correction should leave it detectable. Without
+#' such a control, "platform separation disappeared" cannot be distinguished
+#' from "all between-sample structure was flattened".
+#'
+#' @param beta     Beta matrix, probes x samples.
+#' @param platform Platform label per sample.
+#' @param control  Optional biological label per sample to check is preserved.
+#' @param n_probes Number of top-variance probes to use.
+#' @return List of diagnostics (also messaged).
+platform_batch_diagnostics <- function(beta, platform, control = NULL,
+                                       n_probes = 10000) {
+  beta <- as.matrix(beta)
+  beta <- beta[!apply(beta, 1, anyNA), , drop = FALSE]
+  if (nrow(beta) < 2 || ncol(beta) < 3) {
+    stop("Too few probes or samples for diagnostics.")
+  }
+  v   <- apply(beta, 1, stats::sd)
+  top <- beta[order(v, decreasing = TRUE)[seq_len(min(n_probes, nrow(beta)))], ,
+              drop = FALSE]
+
+  pca <- stats::prcomp(t(top), center = TRUE, scale. = FALSE)
+  pv  <- 100 * pca$sdev^2 / sum(pca$sdev^2)
+  p_of <- function(g, i) tryCatch(
+    summary(stats::aov(pca$x[, i] ~ factor(g)))[[1]][["Pr(>F)"]][1],
+    error = function(e) NA_real_)
+  p_plat <- c(p_of(platform, 1), p_of(platform, 2))
+  p_ctrl <- if (is.null(control)) c(NA_real_, NA_real_)
+            else c(p_of(control, 1), p_of(control, 2))
+
+  cm   <- stats::cor(top, use = "pairwise.complete.obs")
+  same <- outer(platform, platform, "==")
+  diag(same) <- NA
+  within  <- mean(cm[which(same)],  na.rm = TRUE)
+  between <- mean(cm[which(!same)], na.rm = TRUE)
+
+  message(sprintf(
+    "platform_batch_diagnostics: PC1 %.1f%% PC2 %.1f%% | platform p: PC1=%.3g PC2=%.3g | corr within=%.4f between=%.4f (gap %+.4f)",
+    pv[1], pv[2], p_plat[1], p_plat[2], within, between, within - between))
+  if (!is.null(control)) {
+    message(sprintf("  control signal p: PC1=%.3g PC2=%.3g (small = preserved)",
+                    p_ctrl[1], p_ctrl[2]))
+  }
+
+  list(pc_var = pv[1:2], p_platform = p_plat, p_control = p_ctrl,
+       corr_within = within, corr_between = between,
+       corr_gap = within - between, pca = pca)
 }
