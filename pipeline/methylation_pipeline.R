@@ -69,7 +69,13 @@ option_list <- list(
                          "ComBat (e.g. 'Group'). Omit for a single-group",
                          "cohort. A covariate collinear with platform is not",
                          "identifiable."),
-              metavar="cols")
+              metavar="cols"),
+  make_option("--cnv_references", type="character", default=NULL,
+              help=paste("Sample sheet of control IDATs for the CNV step.",
+                         "Overrides the prepared per-platform reference in",
+                         "Anno/<platform>/. When neither is present the",
+                         "yamapData internal EPIC reference is used."),
+              metavar="file")
 )
 
 opt_parser <- OptionParser(

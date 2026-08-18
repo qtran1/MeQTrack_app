@@ -127,6 +127,37 @@ run_cnv_analysis <- function(rgset, sample_info,
 #' @param seg_dir Output directory for CNV segment files
 #' @param threads Number of CPU threads to use
 #' @return List containing CNV results
+#' Locate a prepared CNV control reference for an array platform.
+#'
+#' Looks for Anno/<platform>/<platform>_CNV_controls.rds, built once by
+#' scripts/build_cnv_controls.R. Returns NULL when no prepared reference
+#' exists for the platform, which is not an error — the caller falls back to
+#' the yamapData internal EPIC reference.
+#'
+#' The search mirrors qc.R::find_anno_file(): the pipeline is normally invoked
+#' from pipeline/, but may be sourced from the repo root or from the app.
+#'
+#' @param array_type Platform label, e.g. "EPICv2".
+#' @param anno_dir   Optional explicit Anno/ directory.
+#' @return Path to the .rds, or NULL.
+find_cnv_control_reference <- function(array_type, anno_dir = NULL) {
+  if (is.null(array_type) || !nzchar(array_type)) return(NULL)
+  # Canonicalise so "epicv2" and "EPICV2" both find Anno/EPICv2/.
+  plat <- switch(toupper(array_type),
+                 "450K" = "450K", "EPIC" = "EPIC", "EPICV2" = "EPICv2",
+                 array_type)
+  rel  <- file.path(plat, paste0(plat, "_CNV_controls.rds"))
+
+  roots <- if (!is.null(anno_dir)) anno_dir else
+    c(file.path("..", "Anno"), "Anno", file.path(getwd(), "Anno"),
+      file.path(getwd(), "..", "Anno"))
+  for (r in roots) {
+    p <- file.path(r, rel)
+    if (file.exists(p)) return(normalizePath(p))
+  }
+  NULL
+}
+
 run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
                             threads, array_type = "EPICv2",
                             gain_threshold =  0.18,
@@ -160,21 +191,46 @@ run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
     array_type  # pass through unknown values and let conumee2 error
   )
 
-  # Load reference samples if provided
+  # Reference controls, in priority order:
+  #   1. an explicit reference sample sheet (--cnv_references / config)
+  #   2. a prepared platform-matched .rds under Anno/<platform>/ , built once
+  #      by scripts/build_cnv_controls.R
+  #   3. the yamapData internal EPIC reference
+  #
+  # (2) matters most for EPICv2: yamapData is EPIC-based, so without our own
+  # EPICv2 controls the annotation has to be intersected down to EPIC probes
+  # (see anno_array_type below) purely to match the reference.
+  prepared <- find_cnv_control_reference(array_type)
+
   if (!is.null(references)) {
-    message("Loading reference samples...")
+    message("Loading reference samples from sample sheet...")
     ref_rgset <- read.metharray.exp(base = NULL, targets = references, recursive = TRUE)
-    #ref_rgset@annotation <- rgset@annotation
-    
-    # Preprocess reference samples
     ref_mset <- preprocessNoob(ref_rgset)
     ref_controls <- CNV.load(ref_mset)
+    using_matched_controls <- FALSE
+  } else if (!is.null(prepared)) {
+    obj <- readRDS(prepared)
+    ref_controls <- obj$controls
+    m <- obj$meta
+    message(sprintf("Using prepared %s CNV controls: %d samples x %d probes (built %s)",
+                    m$platform, m$n_samples, m$n_probes, m$built))
+    if (length(m$excluded)) {
+      message("  controls excluded at build time: ",
+              paste(m$excluded, collapse = ", "))
+    }
+    if (!identical(toupper(m$platform), toupper(array_type))) {
+      warning("Prepared controls are ", m$platform, " but the query is ",
+              array_type, "; falling back to probe intersection.")
+      using_matched_controls <- FALSE
+    } else {
+      using_matched_controls <- TRUE
+    }
   } else {
-    message("Using internal reference samples...")
-    # Load the yamapData internal reference dataset
+    message("Using internal yamapData reference samples...")
     ref
     ref_mset <- preprocessNoob(ref)
     ref_controls <- CNV.load(ref_mset)
+    using_matched_controls <- FALSE
   }
   
   # Create conumee annotation
@@ -186,9 +242,29 @@ run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
     data("exclude_regions")
     data("detail_regions")
       
-    # For EPICv2 samples, create annotation using both EPIC and EPICv2 to get probe overlap
-    # with the internal EPIC reference controls. For 450k, use only 450k.
-    anno_array_type <- if (array_type == "450k") "450k" else c("EPIC", array_type)
+    # Annotation probe space.
+    #
+    # With platform-matched controls (a prepared reference built from IDATs of
+    # the same array) the annotation can be the query's own platform: query,
+    # reference and annotation already agree, so nothing needs intersecting.
+    # This keeps EPICv2-specific probes, giving denser bins than the fallback.
+    #
+    # Without them the reference is yamapData's EPIC panel, so an EPICv2 query
+    # must be intersected down to c("EPIC", "EPICv2") to share a probe space
+    # with it. That is a compatibility compromise, not the preferred path.
+    # 450k is always its own annotation.
+    anno_array_type <- if (array_type == "450k") {
+      "450k"
+    } else if (using_matched_controls) {
+      array_type
+    } else {
+      # unique() so an EPIC query does not become c("EPIC", "EPIC").
+      unique(c("EPIC", array_type))
+    }
+    message("CNV annotation probe space: ",
+            paste(anno_array_type, collapse = " + "),
+            if (using_matched_controls) "  (platform-matched controls)" else
+              "  (intersected for yamapData compatibility)")
     anno <- conumee2::CNV.create_anno(
       exclude_regions = exclude_regions,
       bin_minprobes = 15,
