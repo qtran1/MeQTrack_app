@@ -667,11 +667,13 @@ generate_cnv_frequency_plot <- function(segments,
   pdf_path <- file.path(output_dir, "cnv_frequency_plot.pdf")
   pdf(pdf_path, width = 12, height = 5)
   
-  # Call the freqplot function
+  # Call the freqplot function. plot.title = "" suppresses the on-plot title:
+  # the figure is always captioned by its filename or the report section around
+  # it, so the in-plot heading was redundant.
   freqplot(segments,
            gain_threshold = gain_threshold,
            loss_threshold = loss_threshold,
-           plot.title = "CNV Frequency Plot")
+           plot.title = "")
   
   dev.off()
   
@@ -735,23 +737,45 @@ source_freqplot_functions <- function() {
 
     rect(g.start, 0, g.end, 0 - (nloss/n.subj), col="#018571", border="#018571")
     
-    mtext(plot.title, side=3, at=g.end[n.ints]/2, cex=1.3)
+    if (!is.null(plot.title) && nzchar(plot.title)) {
+      mtext(plot.title, side=3, at=g.end[n.ints]/2, cex=1.3)
+    }
     mtext("% of Gain or Loss", side=2, at=0, cex=1.0)
-    
-    chr.start <- c(g.start[1], g.start[c(segs.mtx$chrom[-1] != segs.mtx$chrom[-n.ints])])
-    if (length(chr.start) >= 22) {
-      chr.start <- chr.start[-22]
+
+    # Chromosome boundaries. `brk` holds the index of the last interval of each
+    # chromosome, so a chromosome spans g.start[brk_prev + 1] .. g.end[brk].
+    #
+    # The previous version indexed g.start with the raw logical vector
+    # (length n.ints - 1) rather than with the boundary positions, which
+    # selected the interval *before* each boundary and pulled every label left
+    # of its rectangle. Label positions are now derived from the interval
+    # ranges themselves, and the chromosome identity is read from the data
+    # instead of assuming a fixed c(1:21, "X", "Y") sequence -- the old
+    # hard-coded vector combined with a [-22] drop mislabelled every
+    # chromosome after 21 whenever X/Y were absent.
+    brk       <- which(segs.mtx$chrom[-1] != segs.mtx$chrom[-n.ints])
+    first.int <- c(1, brk + 1)
+    last.int  <- c(brk, n.ints)
+    chr.start <- g.start[first.int]
+    chr.end   <- g.end[last.int]
+
+    chr.codes  <- segs.mtx$chrom[first.int]
+    chr.labels <- ifelse(chr.codes == 23, "X",
+                  ifelse(chr.codes == 24, "Y", as.character(chr.codes)))
+
+    # Drop only labels that genuinely cannot fit: compare each label's rendered
+    # width against its rectangle. This keeps chr22 whenever there is room for
+    # it, rather than deleting position 22 unconditionally.
+    cex.chr  <- 0.6
+    mid      <- (chr.start + chr.end) / 2
+    box.w    <- chr.end - chr.start
+    lab.w    <- strwidth(chr.labels, cex = cex.chr)
+    show     <- lab.w <= box.w
+    if (any(!show)) {
+      message("freqplot: omitting cramped chromosome label(s): ",
+              paste(chr.labels[!show], collapse = ", "))
     }
-    
-    chr.end <- c(g.end[c(segs.mtx$chrom[-1] != segs.mtx$chrom[-n.ints])], g.end[n.ints])
-    if (length(chr.end) >= 22) {
-      chr.end <- chr.end[-22]
-    }
-    
-    chr.labels <- c(1:21, "X", "Y")
-    chr.labels <- chr.labels[1:min(length(chr.start), length(chr.labels))]
-    
-    text((chr.start + chr.end)/2, -1.05, chr.labels, cex=0.6)
+    text(mid[show], -1.05, chr.labels[show], cex = cex.chr)
   }
   
   # Define supporting functions and assign to global environment
