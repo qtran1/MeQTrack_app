@@ -37,7 +37,15 @@ opt <- parse_args(OptionParser(option_list = list(
   make_option("--keep_all", action = "store_true", default = FALSE,
               help = "Skip the correlation gate and keep every control"),
   make_option("--normalization", type = "character", default = "noob",
-              help = "noob | raw [default %default]")
+              help = "noob | raw [default %default]"),
+  make_option("--skip_flatness", action = "store_true", default = FALSE,
+              help = "Skip the leave-one-out flatness gate"),
+  make_option("--seg_thresh", type = "double", default = 0.20,
+              help = "Flatness: |seg.mean| above this counts as altered [default %default]"),
+  make_option("--frac_thresh", type = "double", default = 0.02,
+              help = "Flatness: altered genome fraction above this drops the control [default %default]"),
+  make_option("--flatness_pdf", type = "character", default = NULL,
+              help = "Optional PDF of per-control leave-one-out genome plots")
 )))
 
 if (is.null(opt$idat_dir) || is.null(opt$output)) {
@@ -51,6 +59,11 @@ suppressPackageStartupMessages({
   library(minfi)
   library(conumee2)
 })
+
+# Shared leave-one-out flatness scan (also used by check_cnv_controls_flatness.R).
+source(file.path(dirname(sub("^--file=", "",
+  commandArgs(FALSE)[grep("^--file=", commandArgs(FALSE))][1])),
+  "cnv_flatness.R"))
 
 # ---- collect IDAT stems ---------------------------------------------------
 grn <- list.files(opt$idat_dir, pattern = "_Grn\\.idat(\\.gz)?$",
@@ -136,6 +149,72 @@ if (!opt$keep_all) {
   }
 }
 
+# ---- flatness gate --------------------------------------------------------
+# The correlation gate above catches technical outliers but is blind to
+# copy-number events: a CNV shared across controls (or one large enough to
+# survive) still passes, gets baked into the baseline, and then shows up
+# inverted in every query. So fit each surviving control against the others
+# (leave-one-out), segment, and drop any whose genome is not flat.
+flatness <- NULL
+nonflat  <- character(0)
+if (!opt$skip_flatness) {
+  if (ncol(controls@intensity) < 3) {
+    message("\nFewer than 3 controls after the correlation gate; skipping the ",
+            "flatness scan (leave-one-out needs >= 3).")
+  } else {
+    message("\nLeave-one-out flatness scan (fits every control; may take a while)...")
+    data("exclude_regions"); data("detail_regions")
+    anno <- conumee2::CNV.create_anno(
+      exclude_regions = exclude_regions, detail_regions = detail_regions,
+      bin_minprobes = 15, bin_minsize = 50000, array_type = opt$platform
+    )
+    common <- intersect(names(anno@probes), rownames(controls@intensity))
+    if (!length(common)) stop("No probes shared between annotation and controls.")
+    anno@probes <- anno@probes[names(anno@probes) %in% common]
+    # Score on a probe-aligned COPY; the saved reference keeps its full probe
+    # set (the pipeline intersects it against its own annotation at run time).
+    ctrl_aligned <- controls
+    ctrl_aligned@intensity <- controls@intensity[common, , drop = FALSE]
+
+    plot_fn <- NULL
+    if (!is.null(opt$flatness_pdf)) {
+      dir.create(dirname(opt$flatness_pdf), recursive = TRUE, showWarnings = FALSE)
+      pdf(opt$flatness_pdf, width = 10, height = 5)
+      plot_fn <- function(seg, title) conumee2::CNV.genomeplot(
+        seg, main = title,
+        cols = c("#018571", "#80cdc1", "#f5f5f5", "#dfc27d", "#a6611a"))
+    }
+    flatness <- cnv_flatness_scan(ctrl_aligned, anno,
+                                  seg_thresh  = opt$seg_thresh,
+                                  frac_thresh = opt$frac_thresh,
+                                  plot_fn     = plot_fn)
+    if (!is.null(opt$flatness_pdf)) {
+      dev.off(); message("Per-control genome plots: ", opt$flatness_pdf)
+    }
+
+    message("\nFlatness result (worst first):")
+    for (j in seq_len(nrow(flatness))) {
+      f <- flatness[j, ]
+      message(sprintf("  %-22s max|seg.mean| %.3f  altered %5.1f%%  -> %s",
+                      f$sample, f$max_abs_segmean, 100 * f$frac_genome_alt,
+                      f$verdict))
+    }
+    nonflat <- flatness$sample[flatness$verdict == "NOT-FLAT"]
+    if (length(nonflat)) {
+      if (ncol(x) - length(nonflat) < 2)
+        stop("Flatness gate would leave fewer than 2 controls; ",
+             "inspect the set or pass --skip_flatness.")
+      message(sprintf("\nDropping %d non-flat control(s): %s",
+                      length(nonflat), paste(nonflat, collapse = ", ")))
+      keep <- setdiff(colnames(controls@intensity), nonflat)
+      controls@intensity <- controls@intensity[, keep, drop = FALSE]
+      x <- as.matrix(controls@intensity)
+    } else {
+      message("\nAll controls are flat at these thresholds. ✔")
+    }
+  }
+}
+
 overall_median <- stats::median(x, na.rm = TRUE)
 message(sprintf("\nFinal reference: %d probes x %d samples, median intensity %.1f",
                 nrow(x), ncol(x), overall_median))
@@ -152,9 +231,12 @@ meta <- list(
   n_probes      = nrow(x),
   sample_ids    = colnames(x),
   excluded      = c(if (!is.null(opt$exclude)) trimws(strsplit(opt$exclude, ",")[[1]]),
-                    dropped),
+                    dropped, nonflat),
   median_intensity = round(overall_median, 1),
   cor_with_others  = round(cor_with_others, 4),
+  flatness         = flatness,          # per-control leave-one-out scan (NULL if skipped)
+  flatness_dropped = nonflat,
+  flatness_thresholds = c(seg_thresh = opt$seg_thresh, frac_thresh = opt$frac_thresh),
   normalization = opt$normalization,
   source_dir    = normalizePath(opt$idat_dir, mustWork = FALSE),
   built         = format(Sys.time(), "%Y-%m-%d %H:%M:%S")
