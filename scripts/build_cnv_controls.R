@@ -66,12 +66,13 @@ source(file.path(dirname(sub("^--file=", "",
   "cnv_flatness.R"))
 
 # ---- collect IDAT stems ---------------------------------------------------
+# Case-insensitive: Illumina exports vary (_Grn.idat, _Grn.IDAT, .idat.gz).
 grn <- list.files(opt$idat_dir, pattern = "_Grn\\.idat(\\.gz)?$",
-                  full.names = TRUE, recursive = TRUE)
+                  full.names = TRUE, recursive = TRUE, ignore.case = TRUE)
 # macOS AppleDouble sidecars (._foo_Grn.idat) look like IDATs but are 4 KB
 # resource forks; minfi will happily try to read them and fail.
 grn <- grn[!grepl("(^|/)\\._", grn)]
-stems <- unique(sub("_Grn\\.idat(\\.gz)?$", "", grn))
+stems <- unique(sub("_Grn\\.idat(\\.gz)?$", "", grn, ignore.case = TRUE))
 if (!length(stems)) stop("No IDATs found under ", opt$idat_dir)
 
 if (!is.null(opt$exclude) && nzchar(opt$exclude)) {

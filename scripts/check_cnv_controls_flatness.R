@@ -61,10 +61,11 @@ source(file.path(dirname(sub("^--file=", "",
   "cnv_flatness.R"))
 
 # ---- collect IDAT stems (same filtering as build_cnv_controls.R) ----------
+# Case-insensitive: Illumina exports vary (_Grn.idat, _Grn.IDAT, .idat.gz).
 grn <- list.files(opt$idat_dir, pattern = "_Grn\\.idat(\\.gz)?$",
-                  full.names = TRUE, recursive = TRUE)
+                  full.names = TRUE, recursive = TRUE, ignore.case = TRUE)
 grn <- grn[!grepl("(^|/)\\._", grn)]                 # skip macOS AppleDouble
-stems <- unique(sub("_Grn\\.idat(\\.gz)?$", "", grn))
+stems <- unique(sub("_Grn\\.idat(\\.gz)?$", "", grn, ignore.case = TRUE))
 if (length(stems) < 3)
   stop("Need at least 3 controls for a leave-one-out flatness check; found ", length(stems))
 
