@@ -193,6 +193,23 @@ log_message(paste("Array type:", opt$array_type), log_file)
 log_message(paste("Probe directory:", opt$data_dir), log_file)
 log_message(paste("Threads:", opt$threads), log_file)
 
+# --- run provenance: record exactly what was chosen, in the run folder ------
+# Everything above/here goes to <run>/pipeline_log.txt via log_message, so a
+# folder is self-describing: which sheet, which step, which code version.
+log_message(paste("Step:", opt$step), log_file)
+log_message(paste("Input samplesheet:", opt$input), log_file)
+if (!is.null(opt$config))         log_message(paste("Config file:", opt$config), log_file)
+if (!is.null(opt$cnv_references)) log_message(paste("CNV references (explicit):", opt$cnv_references), log_file)
+git_head <- suppressWarnings(tryCatch(
+  system2("git", c("rev-parse", "--short", "HEAD"), stdout = TRUE, stderr = FALSE),
+  error = function(e) character(0)))
+git_branch <- suppressWarnings(tryCatch(
+  system2("git", c("rev-parse", "--abbrev-ref", "HEAD"), stdout = TRUE, stderr = FALSE),
+  error = function(e) character(0)))
+if (length(git_head)) log_message(paste0("Code version: ", paste(git_branch, collapse = ""),
+                                         " @ ", paste(git_head, collapse = "")), log_file)
+log_message(paste("R:", R.version.string), log_file)
+
 if (opt$hpc) {
   log_message("Generating HPC submission scripts", log_file)
   generate_hpc_scripts(config, opt, main_dir)
@@ -935,6 +952,33 @@ run_pipeline <- function(step) {
       references <- NULL
     }
     
+    # Record the CNV settings + which reference/controls will be used, so the
+    # run folder's pipeline_log.txt shows it (run_conumee_cnv itself only uses
+    # message(), which never reaches the log file).
+    log_message(paste("CNV method:", cnv_method), log_file)
+    log_message(sprintf("CNV thresholds: gain +%.2f / loss %.2f",
+                        cnv_gain_threshold, cnv_loss_threshold), log_file)
+    if (!is.null(references)) {
+      log_message("CNV reference: explicit reference samplesheet (--cnv_references)", log_file)
+    } else {
+      prepared_ref <- tryCatch(find_cnv_control_reference(array_type),
+                               error = function(e) NULL)
+      ref_meta <- if (!is.null(prepared_ref))
+        tryCatch(readRDS(prepared_ref)$meta, error = function(e) NULL) else NULL
+      if (!is.null(ref_meta)) {
+        log_message(sprintf("CNV reference: prepared %s controls at %s (%d samples, built %s)",
+                            ref_meta$platform, prepared_ref, ref_meta$n_samples,
+                            ref_meta$built), log_file)
+        if (length(ref_meta$excluded))
+          log_message(paste("  controls excluded (non-flat / low-correlation):",
+                            paste(ref_meta$excluded, collapse = ", ")), log_file)
+      } else if (!is.null(prepared_ref)) {
+        log_message(paste("CNV reference: prepared controls at", prepared_ref), log_file)
+      } else {
+        log_message("CNV reference: internal yamapData EPIC panel (fallback)", log_file)
+      }
+    }
+
     # Run CNV analysis
     cnv_results <- run_cnv_analysis(
       rgset,
