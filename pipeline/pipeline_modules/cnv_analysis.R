@@ -548,11 +548,16 @@ process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_d
   # Matches the CNV heatmap's teal/brown diverging scheme.
   pdf_file <- file.path(plots_dir, paste0(clean_sample_id, "_cnv_profile.pdf"))
   pdf(pdf_file, width = 10, height = 5)
+  # CNV.genomeplot draws the panel (with xlab=NA, ylab=NA) and manages par
+  # itself — touching par() around the call disrupts its internal title /
+  # chromosome / gene / y-axis drawing. So leave par alone and only add the
+  # axis titles afterwards; the default margins have room for them.
   CNV.genomeplot(
     cnv_segment,
     main = clean_sample_id,
     cols = c("#018571", "#80cdc1", "#f5f5f5", "#dfc27d", "#a6611a")
   )
+  title(xlab = "Chromosome", ylab = expression(log[2] ~ "copy-number ratio"))
   # Gain/loss threshold lines: neutral grey so they don't clash with the
   # new teal/brown palette. Asymmetric — gain at +gain_threshold,
   # loss at loss_threshold (already signed negative).
