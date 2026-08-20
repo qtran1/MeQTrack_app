@@ -10309,6 +10309,35 @@
       "Maintainer": "Terry M Therneau <therneau.terry@mayo.edu>",
       "Repository": "CRAN"
     },
+    "sva": {
+      "Package": "sva",
+      "Version": "3.60.0",
+      "Source": "Bioconductor",
+      "Repository": "Bioconductor 3.23",
+      "Depends": [
+        "R (>= 3.2)",
+        "mgcv",
+        "genefilter",
+        "BiocParallel"
+      ],
+      "Imports": [
+        "matrixStats",
+        "stats",
+        "graphics",
+        "utils",
+        "limma",
+        "edgeR"
+      ],
+      "Suggests": [
+        "pamr",
+        "bladderbatch",
+        "BiocStyle",
+        "zebrafishRNASeq",
+        "testthat"
+      ],
+      "License": "Artistic-2.0",
+      "NeedsCompilation": "yes"
+    },
     "sys": {
       "Package": "sys",
       "Version": "3.4.3",
