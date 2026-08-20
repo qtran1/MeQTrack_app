@@ -747,6 +747,9 @@ generate_cnv_frequency_plot <- function(segments,
   # Generate plot
   pdf_path <- file.path(output_dir, "cnv_frequency_plot.pdf")
   pdf(pdf_path, width = 12, height = 5)
+  # Margins for the axis titles + tick labels freqplot draws (left: y-scale +
+  # "% of Gain or Loss"; bottom: chromosome numbers + "Chromosome").
+  par(mar = c(4, 5, 2, 2) + 0.1)
   
   # Call the freqplot function. plot.title = "" suppresses the on-plot title:
   # the figure is always captioned by its filename or the report section around
@@ -809,10 +812,13 @@ source_freqplot_functions <- function() {
     plot(c(0, g.end[n.ints]), c(-0.8, 0.8),  
          type="n", axes=FALSE,
          xlab="", ylab="")
-    axis(side=2, at=c(-1, -0.5, 0, 0.5, 1),
-         labels=c("100", "50", "0", "50", "100"), line=-1.8, las=1, cex=2.2)
-    
     rect(g.start, -1, g.end, 1, col=bg.col, border=bg.col)
+
+    # y-axis in the LEFT MARGIN (outside the panel) — drawn AFTER the grey
+    # chromosome rectangles so the tick labels are not painted over. The old
+    # code used line=-1.8 (inside the panel) and the rect() above hid it.
+    axis(side=2, at=c(-1, -0.5, 0, 0.5, 1),
+         labels=c("100", "50", "0", "50", "100"), las=1, cex.axis=0.9)
     
     rect(g.start, 0, g.end, 0 + (ngain/n.subj), col="#a6611a", border="#a6611a")
 
@@ -821,7 +827,7 @@ source_freqplot_functions <- function() {
     if (!is.null(plot.title) && nzchar(plot.title)) {
       mtext(plot.title, side=3, at=g.end[n.ints]/2, cex=1.3)
     }
-    mtext("% of Gain or Loss", side=2, at=0, cex=1.0)
+    mtext("% of Gain or Loss", side=2, line=3, cex=1.0)
 
     # Chromosome boundaries. `brk` holds the index of the last interval of each
     # chromosome, so a chromosome spans g.start[brk_prev + 1] .. g.end[brk].
@@ -856,7 +862,11 @@ source_freqplot_functions <- function() {
       message("freqplot: omitting cramped chromosome label(s): ",
               paste(chr.labels[!show], collapse = ", "))
     }
-    text(mid[show], -1.05, chr.labels[show], cex = cex.chr)
+    # Chromosome numbers + x-axis title in the BOTTOM MARGIN via mtext (at =
+    # user x-coord), which is clip-safe — the old text() at y=-1.05 sat below
+    # the plotted range and was cut off. Mirrors the genome plot's "Chromosome".
+    mtext(chr.labels[show], side = 1, at = mid[show], line = 0.3, cex = cex.chr)
+    mtext("Chromosome", side = 1, line = 1.8, cex = 1.0)
   }
   
   # Define supporting functions and assign to global environment
