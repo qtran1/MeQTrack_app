@@ -115,7 +115,7 @@ default_config <- function() {
     # versions of MeQTrack.
     cnv = list(
       method          = "conumee",   # Options: conumee, ChAMP, cnAnalysis450k
-      gain_threshold  =  0.18,
+      gain_threshold  =  0.15,
       loss_threshold  = -0.20,
       frequency_plot  = TRUE
     ),

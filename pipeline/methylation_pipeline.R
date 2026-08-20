@@ -918,7 +918,7 @@ run_pipeline <- function(step) {
     # `threshold` key (older run_manifest.json files) still works and is
     # applied symmetrically as ±abs(threshold).
     cnv_method <- "conumee"
-    cnv_gain_threshold <-  0.18
+    cnv_gain_threshold <-  0.15
     cnv_loss_threshold <- -0.20
     cnv_frequency_plot <- TRUE
 

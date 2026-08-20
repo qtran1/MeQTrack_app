@@ -89,7 +89,7 @@ run_cnv_analysis <- function(rgset, sample_info,
                            output_dir = ".",
                            plots_dir  = NULL,
                            threads = 4,
-                           gain_threshold =  0.18,
+                           gain_threshold =  0.15,
                            loss_threshold = -0.20) {
 
   message(paste("Running CNV analysis using", method, "method..."))
@@ -160,7 +160,7 @@ find_cnv_control_reference <- function(array_type, anno_dir = NULL) {
 
 run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
                             threads, array_type = "EPICv2",
-                            gain_threshold =  0.18,
+                            gain_threshold =  0.15,
                             loss_threshold = -0.20) {
 
   # conumee2 + yamapData are attached here (not at the top of
@@ -429,7 +429,7 @@ run_conumee_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir,
 #' @param seg_dir Output directory for CNV segment files
 #' @return List containing sample CNV results
 process_conumee_sample <- function(rgset, sample_id, ref_controls, anno, plots_dir, seg_dir,
-                                   gain_threshold =  0.18,
+                                   gain_threshold =  0.15,
                                    loss_threshold = -0.20) {
   message(paste("Processing sample:", sample_id))
   
@@ -684,7 +684,7 @@ run_champ_cnv <- function(rgset, sample_info, references, plots_dir, seg_dir, th
 #' @param output_dir Output directory for plots
 #' @return Path to frequency plot
 generate_cnv_frequency_plot <- function(segments,
-                                        gain_threshold =  0.18,
+                                        gain_threshold =  0.15,
                                         loss_threshold = -0.20,
                                         threshold = NULL,
                                         output_dir = ".") {
@@ -774,7 +774,7 @@ source_freqplot_functions <- function() {
   # its seg.mean is strictly greater than gain_threshold, and a loss iff
   # strictly less than loss_threshold (loss_threshold is signed negative).
   freqplot <<- function(segs.data,
-                        gain_threshold =  0.18,
+                        gain_threshold =  0.15,
                         loss_threshold = -0.20,
                         plot.title = "Copy Number Frequency") {
     gain_threshold <-  abs(gain_threshold)
