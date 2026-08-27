@@ -77,7 +77,11 @@ default_config <- function() {
       sample_detection_p_threshold   = 0.05,
       failed_probe_percent_threshold = 25,
       min_median_intensity           = 10.5,
-      max_gct_score                  = 1.8,   # GCT bisulfite-conversion fail cutoff (~1.0 = complete)
+      max_gct_score                  = 1.9,   # GCT flag level (~1.0 = complete conversion)
+      gct_fails_qc                   = FALSE, # GCT is INFORMATIONAL: it does not fail a
+                                              # sample. sesame defines no threshold, and the
+                                              # conversion control is unreliable on degraded /
+                                              # FFPE DNA. Set TRUE to restore hard gating.
       filter_failed_samples          = TRUE
     ),
 

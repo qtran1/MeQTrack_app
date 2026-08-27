@@ -335,7 +335,12 @@ compute_sample_inferences <- function(beta_values, array_type = NULL,
 #'   (columns Sample_ID, GCT_Score) from the preprocess step. When supplied,
 #'   samples whose GCT exceeds \code{max_gct_score} fail QC. Samples with NA
 #'   GCT (e.g. EPICv2, where GCT is not yet computed) are never failed on it.
-#' @param max_gct_score GCT failure threshold. A score near 1.0 means complete
+#' @param gct_fails_qc Whether an elevated GCT score sets Pass_QC = FALSE.
+#'   Default FALSE: GCT is reported via Flag_GCT/GCT_Score but does not fail a
+#'   sample, because sesame defines no threshold and the control is unreliable
+#'   on degraded/FFPE DNA. Set TRUE to restore hard gating.
+#' @param max_gct_score GCT flag threshold (and failure threshold when
+#'   gct_fails_qc = TRUE). A score near 1.0 means complete
 #'   bisulfite conversion; higher means more incomplete. Samples with
 #'   GCT > max_gct_score fail QC.
 #' @param array_type Array type ("450k","EPIC","EPICv2"); used to pick the
@@ -350,7 +355,8 @@ perform_qc <- function(rgset, beta_values, sample_info,
                        failed_probe_percent_threshold = 25,
                        min_median_intensity           = 10.5,
                        gct                            = NULL,
-                       max_gct_score                  = 1.3,
+                       max_gct_score                  = 1.9,
+                       gct_fails_qc                   = FALSE,
                        array_type                     = NULL,
                        output_dir = ".",
                        plots_dir  = NULL) {
@@ -460,9 +466,24 @@ perform_qc <- function(rgset, beta_values, sample_info,
                                   sample_qc$Median_Unmeth_Intensity  < min_median_intensity
 
   # ---------------------------------------------------------------------------
-  # GCT bisulfite-conversion gate. Merge the per-sample GCT score (from the
-  # preprocess step) and fail samples whose conversion is too incomplete.
-  # NA GCT (e.g. EPICv2, not yet computed) is never a failure — Flag_GCT FALSE.
+  # GCT bisulfite-conversion signal. INFORMATIONAL BY DEFAULT — Flag_GCT is
+  # reported but does NOT set Pass_QC = FALSE unless gct_fails_qc = TRUE.
+  #
+  # Why (2026-08-24): sesame publishes no GCT threshold — bisConversionControl()
+  # returns a bare C/T-extension intensity ratio, and the docs say only that
+  # values closer to 1.0 mean more complete conversion. Any cutoff is therefore
+  # arbitrary. Worse, the control is unreliable on exactly the material it most
+  # often flags: Illumina/Zymo note that low-input or degraded DNA lowers the
+  # signal-to-noise of the conversion controls themselves, and a 259-sample FFPE
+  # EPIC study (BMC Res Notes 2025) found conversion QC of "limited value" when
+  # DNA quantity and quality are otherwise adequate.
+  #
+  # Observed cost of gating: in the Melanoma COMET cohort a 1.3 cutoff failed 86
+  # of 188 samples that had pristine detection-p (~0.0003) and <0.3% failed
+  # probes — i.e. the gate was removing good data, not bad.
+  #
+  # Set config$qc$gct_fails_qc = TRUE to restore hard gating for a project that
+  # wants it. NA GCT (e.g. EPICv2) is never flagged.
   # ---------------------------------------------------------------------------
   sample_qc$GCT_Score <- NA_real_
   if (!is.null(gct) && all(c("Sample_ID", "GCT_Score") %in% names(gct))) {
@@ -472,10 +493,11 @@ perform_qc <- function(rgset, beta_values, sample_info,
   sample_qc$Flag_GCT <- !is.na(sample_qc$GCT_Score) &
                         sample_qc$GCT_Score > max_gct_score
 
-  # Pass/fail based on detection p, failed probe rate, and GCT conversion.
+  # Pass/fail on signal-quality metrics. GCT contributes only when the caller
+  # opts in via gct_fails_qc (default FALSE) — see the note above.
   sample_qc$Pass_QC <- !(sample_qc$Flag_Mean_DetP |
                          sample_qc$Flag_Failed_Probes |
-                         sample_qc$Flag_GCT)
+                         (gct_fails_qc & sample_qc$Flag_GCT))
 
   # ---------------------------------------------------------------------------
   # SWAN recovery check for low-intensity samples
@@ -541,7 +563,7 @@ perform_qc <- function(rgset, beta_values, sample_info,
       reasons <- c(reasons, sprintf("Failed probes (%.2f%%) >= %.1f%%",
                                     as.numeric(r["Failed_Probes_Percent"]),
                                     failed_probe_percent_threshold))
-    if (isTRUE(as.logical(r["Flag_GCT"])))
+    if (gct_fails_qc && isTRUE(as.logical(r["Flag_GCT"])))
       reasons <- c(reasons, sprintf("Incomplete bisulfite conversion (GCT %.3f > %.2f)",
                                     as.numeric(r["GCT_Score"]),
                                     max_gct_score))

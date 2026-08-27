@@ -484,7 +484,8 @@ run_pipeline <- function(step) {
     sample_detection_p_threshold   <- 0.05   # Default value
     failed_probe_percent_threshold <- 25     # Default value
     min_median_intensity           <- 10.5   # Default value
-    max_gct_score                  <- 1.3    # GCT bisulfite-conversion fail cutoff
+    max_gct_score                  <- 1.9    # GCT flag level (informational by default)
+    gct_fails_qc                   <- FALSE  # GCT does NOT fail a sample unless opted in
     filter_failed_samples          <- TRUE   # Default value
 
     # GCT table may be absent (old preprocessed data, or qc step run in
@@ -502,6 +503,8 @@ run_pipeline <- function(step) {
         min_median_intensity <- config$qc$min_median_intensity
       if (!is.null(config$qc$max_gct_score))
         max_gct_score <- config$qc$max_gct_score
+      if (!is.null(config$qc$gct_fails_qc))
+        gct_fails_qc <- config$qc$gct_fails_qc
       if (!is.null(config$qc$filter_failed_samples))
         filter_failed_samples <- config$qc$filter_failed_samples
     }
@@ -516,6 +519,7 @@ run_pipeline <- function(step) {
       min_median_intensity           = min_median_intensity,
       gct                            = gct_table,
       max_gct_score                  = max_gct_score,
+      gct_fails_qc                   = gct_fails_qc,
       array_type                     = array_type,
       output_dir = dirs$qc,
       plots_dir  = dirs$figures_qc
