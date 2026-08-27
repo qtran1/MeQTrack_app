@@ -487,16 +487,37 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   
   # Add predicted sex
   message("Predicting sex based on methylation patterns...")
-  pred_sex <- NULL 
-  mset_raw <- preprocessRaw(rgset)
-  gset <- mapToGenome(mset_raw)
-  pred_sex <- getSex(gset)
+  pred_sex <- NULL
+  # minfi::getSex() clusters samples AGAINST EACH OTHER: it calls
+  # kmeans(dd, centers = c(min(dd), max(dd))) on the per-sample X/Y intensity
+  # difference. With one sample min(dd) == max(dd), the two requested centres are
+  # identical, and kmeans aborts with "initial centers are not distinct". It is a
+  # multi-sample method by construction, so there is nothing to fix for n = 1 --
+  # the call is skipped instead of taking the whole preprocessing step down.
+  # Every consumer of pred_sex / Minfi_xMed / Minfi_yMed already guards on the
+  # columns being present, and sesame's own sex inference still runs in the QC
+  # step, so a single-sample run keeps its sex call.
+  if (ncol(rgset) < 2L) {
+    message("Only ", ncol(rgset), " sample(s): skipping minfi sex prediction ",
+            "(getSex needs >= 2 samples to cluster). sesame sex inference in the ",
+            "QC step is unaffected.")
+  } else {
+    mset_raw <- preprocessRaw(rgset)
+    gset <- mapToGenome(mset_raw)
+    pred_sex <- tryCatch(getSex(gset), error = function(e) {
+      warning("minfi sex prediction failed: ", conditionMessage(e),
+              " -- continuing without it.")
+      NULL
+    })
+  }
 
   # Extract predicted sex values from S4 object. Also keep the X/Y median
   # intensities (xMed/yMed, log2) — they drive minfi's call and, retained here,
   # let the karyotype step flag Loss-of-Y (single X by methylation but depleted
   # Y intensity, common in tumours) instead of discarding them.
-  if (is(pred_sex, "DataFrame") || is(pred_sex, "data.frame")) {
+  if (is.null(pred_sex)) {
+    # no minfi call available (single sample, or getSex errored)
+  } else if (is(pred_sex, "DataFrame") || is(pred_sex, "data.frame")) {
     sample_info$pred_sex   <- as.character(pred_sex$predictedSex)
     sample_info$Minfi_xMed <- as.numeric(pred_sex$xMed)
     sample_info$Minfi_yMed <- as.numeric(pred_sex$yMed)
