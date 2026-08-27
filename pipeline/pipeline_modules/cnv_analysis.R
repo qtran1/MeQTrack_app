@@ -936,14 +936,18 @@ source_freqplot_functions <- function() {
       }
     }
     
-    # Remove rows with all NAs
+    # Remove rows with all NAs.
+    # drop = FALSE throughout: with a SINGLE sample X is n.ints x 1, and every
+    # bare [ , ] subset silently collapses it to a vector. The next rowSums()
+    # then dies with "incorrect number of dimensions". Keeping the matrix shape
+    # is the whole fix -- the arithmetic below is already correct for nsamp = 1.
     all.na <- (rowSums(is.na(X)) == nsamp)
-    X <- X[!all.na, ]
+    X <- X[!all.na, , drop = FALSE]
     uniq.ints <- uniq.ints[!all.na, ]
     
     # Combine identical adjacent rows
     x.nints <- nrow(X)
-    x.chng <- rowSums(abs(X[-1, ] - X[-x.nints, ])) > 0
+    x.chng <- rowSums(abs(X[-1, , drop = FALSE] - X[-x.nints, , drop = FALSE])) > 0
     x.chng[is.na(x.chng)] <- TRUE
     chr.chng <- (uniq.ints[-1, 1] != uniq.ints[-x.nints, 1])
     new.row <- which(chr.chng | x.chng)
@@ -952,7 +956,7 @@ source_freqplot_functions <- function() {
     new.start <- uniq.ints[c(1, new.row + 1), 2]
     new.end <- uniq.ints[c(new.row, x.nints), 3]
     
-    X <- X[c(1, new.row + 1), ]
+    X <- X[c(1, new.row + 1), , drop = FALSE]
     new.ints <- cbind.data.frame(
       chrom = new.chr,
       loc.start = new.start,
