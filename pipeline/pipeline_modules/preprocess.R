@@ -1,5 +1,23 @@
 # Preprocessing module for methylation array analysis pipeline
 
+#' Force an openSesame result to matrix shape
+#'
+#' sesame::openSesame() returns a probe x sample matrix for two or more
+#' samples but a plain named vector for a single one. Every downstream
+#' `[ , ]` subset then fails with "incorrect number of dimensions", and
+#' checks written against `rownames()` silently see NULL. This restores the
+#' matrix shape, naming the single column the way sesame names columns for
+#' multi-sample runs: the IDAT prefix, i.e. basename() of the Basename path.
+#'
+#' @param x         Result of openSesame() — matrix or named vector.
+#' @param basenames sample_sheet$Basename, used to name the column.
+#' @return A matrix with probes as rows and one column per sample.
+as_sample_matrix <- function(x, basenames) {
+  if (!is.null(dim(x))) return(x)
+  matrix(x, ncol = 1L,
+         dimnames = list(names(x), basename(as.character(basenames))[1]))
+}
+
 #' Read sample sheet
 #'
 #' @param sample_sheet_path Path to sample sheet CSV
@@ -419,7 +437,13 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   }else {
     beta_v2 <- sesame::openSesame(sample_sheet$Basename, prep = "QCDB", func = getBetas, BPPARAM=bpparam)
   }
-  beta <- beta_v2[, match(sample_sheet$Sentrix_ID, colnames(beta_v2))]
+  # openSesame() returns a plain named vector for a SINGLE sample and a matrix
+  # for two or more, so every [ , ] subset below fails on an n=1 run with
+  # "incorrect number of dimensions". Restore the matrix shape, naming the
+  # column the way sesame names it for multi-sample runs (the IDAT prefix).
+  beta_v2 <- as_sample_matrix(beta_v2, sample_sheet$Basename)
+
+  beta <- beta_v2[, match(sample_sheet$Sentrix_ID, colnames(beta_v2)), drop = FALSE]
   message("Number of rows in beta: ", nrow(beta))
 
   ## openSesame(..., func = pOOBAH) doesn't accept collapseToPfx /
@@ -429,6 +453,11 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   ## match beta's per-CpG space for EPICv2.
   detection_p <- sesame::openSesame(sample_sheet$Basename, func = pOOBAH,
                                     return.pval = TRUE, BPPARAM = bpparam)
+  # Same single-sample vector problem as beta above. Without this the EPICv2
+  # replicate-collapse below is skipped silently (rownames(vector) is NULL), so
+  # beta would be collapsed to one row per CpG while detection_p stayed at
+  # per-replicate granularity.
+  detection_p <- as_sample_matrix(detection_p, sample_sheet$Basename)
 
   if (array_type == "EPICv2" &&
       any(grepl("_(BC|TC)\\d+$", utils::head(rownames(detection_p), 200)))) {
@@ -452,7 +481,8 @@ preprocess_methylation <- function(sample_sheet, array_type = "auto",
   }
 
   detection_p_df = as.data.frame(detection_p)
-  detection_p_df <- detection_p_df[, match(sample_sheet$Sentrix_ID, colnames(detection_p_df))]
+  detection_p_df <- detection_p_df[, match(sample_sheet$Sentrix_ID, colnames(detection_p_df)),
+                                   drop = FALSE]
   message("Number of rows in detection_p: ", nrow(detection_p)) 
   
   # Add predicted sex
