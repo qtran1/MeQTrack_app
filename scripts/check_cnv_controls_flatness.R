@@ -17,7 +17,7 @@
 # the verdict reflects what the pipeline would actually do.
 #
 #   Rscript scripts/check_cnv_controls_flatness.R \
-#     --idat_dir /Volumes/qtran/EPICv2_CNV_Controls \
+#     --idat_dir /path/to/EPICv2_CNV_Controls \
 #     --platform EPICv2 \
 #     --out_pdf  Anno/EPICv2/EPICv2_controls_flatness.pdf \
 #     [--seg_thresh 0.20] [--frac_thresh 0.02] [--exclude 2070..._R01C01]

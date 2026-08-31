@@ -169,7 +169,7 @@ required=(
   "pipeline/data/keep.probes.EPIC.txt"
   "reference/beta_GSE305405_1915samples_top10K.rds"
   "reference/tSNE_embedding_GSE305405_top10K.RData"
-  "reference/COMET_Labkey_August_12_2025.csv"
+  "reference/COMET_reference_labels.csv"
   "Anno/HM450/Clock_Horvath353.rds"
   "Anno/EPICv2/EPICv2.typeI.ext.rds"
   "reference/beta_GSE90496_top10K.rds"

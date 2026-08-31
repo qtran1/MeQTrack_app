@@ -8,7 +8,7 @@
 # controls.
 #
 #   Rscript scripts/build_cnv_controls.R \
-#     --idat_dir /Volumes/qtran/EPICv2_CNV_Controls \
+#     --idat_dir /path/to/EPICv2_CNV_Controls \
 #     --platform EPICv2 \
 #     --output Anno/EPICv2/EPICv2_CNV_controls.rds \
 #     [--exclude 207071180012_R01C01] [--min_cor 0.85] [--keep_all]

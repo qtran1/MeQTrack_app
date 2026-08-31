@@ -1,6 +1,6 @@
 # MeQTrack R pipeline
 
-A CLI-driven DNA methylation analysis pipeline for Illumina 450k, EPIC, and EPICv2 arrays. This folder contains the R source copied from `/Volumes/qtran/MeQTrack` and is the underlying engine that the MeQTrack desktop MVP will wrap.
+A CLI-driven DNA methylation analysis pipeline for Illumina 450k, EPIC, and EPICv2 arrays. It is the underlying engine that the MeQTrack desktop application wraps, and runs standalone with no UI.
 
 ## What it is
 
@@ -31,7 +31,7 @@ After the run completes you should see:
 ```
 pipeline/results_example/
 ├── processed_data/               beta_values.txt, preprocessed_data.RData, detection_p.txt, rgset.RData
-├── qc/                           sample_qc_report.csv (8 rows), qc_results.RData
+├── qc/                           sample_qc_report.csv (4 rows), qc_results.RData
 ├── dimensionality_reduction/     tsne_results.RData, umap_results.RData, hclust_results.RData
 ├── reference_projection/         projected coords CSV, class-hints CSV, projection PDF
 ├── cnv/                          cnv_results.RData, segments/{GSM3735546…}.seg
@@ -61,9 +61,9 @@ The `--input` CSV requires three columns:
 | `Sample_Name` | Human-readable name used in plots and labels |
 | `Basename` | Path **stem** of the IDAT pair (no `_Red.idat` / `_Grn.idat` suffix), absolute or relative to the pipeline folder |
 
-Optional metadata columns (e.g. `Gender`, `Group`, `Batch`) are carried through to downstream plots and can be used for coloring — the bundled `samplesheet_epic.csv` includes `Gender` and a `path` column (the production HPC path) to show how additional metadata travels alongside the required three columns.
+Optional metadata columns (e.g. `Gender`, `Group`, `Batch`) are carried through to downstream plots and can be used for coloring — the bundled `samplesheet_epic.csv` includes a `Sample_Group` column to show how additional metadata travels alongside the required three columns.
 
-`command_line.txt` contains the exact production `bsub` commands used at St. Jude if you need to submit to LSF instead of running locally.
+`command_line.txt` contains generic `bsub` templates if you need to submit to LSF instead of running locally.
 
 ## Full CLI reference
 
@@ -119,7 +119,7 @@ Each step persists its outputs as `.RData` so later steps can be re-run independ
 
 **`utils.R`.** Dependency management: `load_package`, `load_bioc_package`, `install_source_package`, and `install_dependencies()` — the last lists the full CRAN + Bioconductor dependency set and installs yamapData from `data/yamapData_0.0.3.tar.gz` (the 257 MB tarball not currently present in this folder). If you run `install_dependencies()` from a fresh R install, this is where it expects the tarball to live.
 
-**`hpc.R`.** Not invoked during normal runs. When `methylation_pipeline.R` is called with `--hpc`, it generates LSF / SLURM / PBS submission scripts with per-step wrappers (queue, memory, time, threads) and exits without running analysis. `command_line.txt` shows the hand-written `bsub` incantations actually used in production at St. Jude (queue `rhel88_gpu`, 500 GB memory, LSF project `OrrLab`), suggesting the HPC generator is supplementary to these bespoke commands rather than the primary path.
+**`hpc.R`.** Not invoked during normal runs. When `methylation_pipeline.R` is called with `--hpc`, it generates LSF / SLURM / PBS submission scripts with per-step wrappers (queue, memory, time, threads) and exits without running analysis. `command_line.txt` holds site-agnostic `bsub` templates with placeholders for queue, project, and paths, as an alternative to the generated wrappers.
 
 ## Folder contents
 
@@ -144,16 +144,15 @@ pipeline/
     ├── keep.probes.450K.txt      (7.4 MB)  curated 450k probe keep-list
     ├── keep.probes.EPIC.txt      (13.4 MB) curated EPIC  probe keep-list
     ├── keep.probes.EPICv2.txt    (12.3 MB) curated EPICv2 probe keep-list
-    └── example/                  8-sample EPIC demo dataset (GSE130295)
-        ├── samplesheet_epic.csv  samplesheet with relative Basenames + Gender/path metadata
+    └── example/                  4-sample public EPIC demo dataset (GSE130295)
+        ├── README.md              what ships here and why
+        ├── samplesheet_epic.csv   runnable — matches the bundled IDATs
+        ├── samplesheet_450k.csv   format illustration only (synthetic IDs, no IDATs)
+        ├── samplesheet_epicv2.csv format illustration only (synthetic IDs, no IDATs)
         ├── GSM3735546_201465940014_R01C01_{Red,Grn}.idat
         ├── GSM3735547_201465940014_R02C01_{Red,Grn}.idat
         ├── GSM3735548_201465940014_R03C01_{Red,Grn}.idat
-        ├── GSM3735549_201465940014_R04C01_{Red,Grn}.idat
-        ├── GSM3735550_201465940014_R05C01_{Red,Grn}.idat
-        ├── GSM3735551_201465940014_R06C01_{Red,Grn}.idat
-        ├── GSM3735552_201465940014_R07C01_{Red,Grn}.idat
-        └── GSM3735553_201465940014_R08C01_{Red,Grn}.idat
+        └── GSM3735549_201465940014_R04C01_{Red,Grn}.idat
 ```
 
 ## Runtime dependencies

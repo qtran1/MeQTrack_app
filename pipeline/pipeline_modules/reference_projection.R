@@ -47,10 +47,10 @@
     embedding   = "tSNE_embedding_GSE305405_top10K.RData",
     beta_rds    = "beta_GSE305405_1915samples_top10K.rds",
     beta_csv    = NA_character_,
-    metadata    = "COMET_Labkey_August_12_2025.csv",
-    sentrix_col = "X850k Tumor File Name",
-    class_col   = "Tumor Group For Clustering",
-    color_col   = "Col"
+    metadata    = "COMET_reference_labels.csv",
+    sentrix_col = "Sentrix_ID",
+    class_col   = "Tumor_Group",
+    color_col   = "Color"
   ),
 
   # Capper et al. (2018) CNS-tumour methylation reference, GSE90496 — 2801

@@ -3,10 +3,10 @@
 # MeQTrack — LSF submission script (full pipeline, one job)
 #
 # Sized for the 220-sample 450k Melanoma run
-# (samplesheet_450k_hpc.csv, IDATs under /research/groups/orrgrp/...).
+# (samplesheet_450k_hpc.csv, IDATs under /path/to/idats/...).
 #
 # Submit from the repo root on the cluster:
-#     mkdir -p /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack  # once (parent for run dirs + LSF logs)
+#     mkdir -p /path/to/meqtrack_runs  # once (parent for run dirs + LSF logs)
 #     bsub < scripts/submit_hpc_lsf.sh
 #
 # Set the cluster-side REPO_DIR and SAMPLESHEET paths (marked # <-- EDIT) below,
@@ -15,7 +15,7 @@
 # and resources are already set.
 # =============================================================================
 
-#BSUB -J meqtrack_melanoma_450k
+#BSUB -J meqtrack_example_450k
 #BSUB -P melanoma                           # LSF project / account code
 #BSUB -q rhel88_gpu                         # queue
 ##BSUB -gpu "num=1/host"                    # rhel88_gpu is a GPU queue but this pipeline is
@@ -24,15 +24,15 @@
 #BSUB -n 2                                  # few cores, big memory (keep == THREADS below)
 #BSUB -R "span[hosts=1] rusage[mem=128GB]"  # 128GB RAM for 220-sample preprocess; raise if it OOMs
 #BSUB -W 2880                               # walltime: 48h in minutes (220 samples + CNV + report)
-#BSUB -o /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_%J/lsf.%J.out
-#BSUB -e /research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_%J/lsf.%J.err
+#BSUB -o /path/to/meqtrack_runs/example_450k_%J/lsf.%J.out
+#BSUB -e /path/to/meqtrack_runs/example_450k_%J/lsf.%J.err
 
 set -euo pipefail
 
 # ---- EDIT THESE PATHS (cluster-side, absolute) ------------------------------
-REPO_DIR="/research/groups/orrgrp/projects/MeQTrack_app"                       # <-- EDIT: MeQTrack clone on the cluster
-SAMPLESHEET="/research/groups/orrgrp/projects/Melanoma/samplesheet_450k_hpc.csv" # <-- EDIT: cluster path of the 220-sample sheet
-OUTPUT_DIR="/research/rgs01/home/clusterHome/qtran/Melanoma/meqtrack/melanoma_450k_${LSB_JOBID}"  # run dir keyed to the LSF job id (matches %J in -o/-e above, so logs land here)
+REPO_DIR="/path/to/MeQTrack_app"                       # <-- EDIT: MeQTrack clone on the cluster
+SAMPLESHEET="/path/to/samplesheet_450k_hpc.csv" # <-- EDIT: cluster path of the 220-sample sheet
+OUTPUT_DIR="/path/to/meqtrack_runs/example_450k_${LSB_JOBID}"  # run dir keyed to the LSF job id (matches %J in -o/-e above, so logs land here)
 ARRAY_TYPE="450k"
 THREADS=2                                   # keep equal to "#BSUB -n" above
 

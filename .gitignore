@@ -55,6 +55,12 @@ Anno/EPICv2/EPICv2ToEPIC_conversion.tsv
 # Prepared CNV control references (~40 MB each). Not committed: rebuild from
 # the control IDATs with scripts/build_cnv_controls.R, e.g.
 #   Rscript scripts/build_cnv_controls.R \
-#     --idat_dir /Volumes/qtran/EPICv2_CNV_Controls \
+#     --idat_dir /path/to/EPICv2_CNV_Controls \
 #     --platform EPICv2 --output Anno/EPICv2/EPICv2_CNV_controls.rds
 Anno/*/[A-Za-z0-9]*_CNV_controls.rds
+
+# Clinical LabKey export — patient-level data, never publish. The pipeline only
+# needs Sentrix ID / tumour group / colour, which ship de-identified in
+# reference/COMET_reference_labels.csv (regenerate from the LabKey export if the
+# cohort changes). Kept outside the repo at ../COMET_Labkey_*.csv.
+reference/COMET_Labkey_*.csv
