@@ -55,7 +55,11 @@ MeQTrack_app/
 ├── setup.R               # One-shot renv provisioning (CRAN + Bioconductor)
 ├── meqtrack.command      # macOS double-click launcher
 ├── meqtrack.bat          # Windows double-click launcher
-└── QUICKSTART.md         # Install, use, and developer-setup guide
+├── QUICKSTART.md         # Install, use, and developer-setup guide
+├── CONTRIBUTING.md       # How to report issues and propose changes
+├── CODE_OF_CONDUCT.md    # Contributor Covenant
+├── SECURITY.md           # Vulnerability and data-exposure reporting
+└── LICENSE               # GNU General Public License v3.0
 ```
 
 Each of `pipeline/` and `Anno/` has its own `README.md` with full detail. Start
